@@ -2,35 +2,4 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.brix.campus.mapper.ReportMapper">
 
-    <!-- 后台举报分页：联表取商品与举报人/处理人昵称 -->
-    <select id="selectReportPage" resultType="com.brix.campus.model.vo.ReportVO">
-        SELECT r.id             AS id,
-               r.item_id        AS itemId,
-               i.title          AS itemTitle,
-               i.cover_image    AS itemCover,
-               r.reporter_id    AS reporterId,
-               ru.nickname      AS reporterNickname,
-               r.reason         AS reason,
-               r.description    AS description,
-               r.status         AS status,
-               r.handle_action  AS handleAction,
-               r.handler_id     AS handlerId,
-               hu.nickname      AS handlerNickname,
-               r.handled_at     AS handledAt,
-               r.created_at     AS createdAt
-          FROM t_report r
-          LEFT JOIN t_item i     ON i.id = r.item_id
-          LEFT JOIN t_user ru    ON ru.id = r.reporter_id
-          LEFT JOIN t_user hu    ON hu.id = r.handler_id
-        <where>
-            <if test="q.status != null and q.status != ''">
-                AND r.status = #{q.status}
-            </if>
-            <if test="q.itemId != null">
-                AND r.item_id = #{q.itemId}
-            </if>
-        </where>
-         ORDER BY r.created_at DESC, r.id DESC
-    </select>
-
 </mapper>

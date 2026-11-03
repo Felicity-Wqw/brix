@@ -1,93 +1,144 @@
 # ============================================================================
-# Brix Campus Market 后端配置
-# 说明：数据库账号与密码全部使用「占位符 + 默认值」，源码中不出现真实凭据。
-#   覆盖方式（任选其一）：
-#     1) 环境变量：DB_USERNAME / DB_PASSWORD / DB_HOST / DB_PORT / DB_NAME
-#     2) JVM 参数：-DDB_USERNAME=xxx -DDB_PASSWORD=xxx
-#   默认值 brix / brix123 对应 db/schema.sql 注释里的应用账号建法。
+# Brix Campus Market 后端配置（单文件版）
+#
+# 所有配置集中在本文件，环境差异项（数据库地址/账号/密码等）统一用
+# 「${环境变量:默认值}」占位符注入：
+#   1) 环境变量：本地由根目录 .env.bat（已 gitignore）提供，
+#      如 DB_USERNAME / DB_PASSWORD / AI_API_KEY，由 start-backend.bat 自动加载
+#      （注意：IDEA 直接运行启动类时 .env.bat 不生效，需在 Run Configuration
+#       的 Environment variables 里手动填同样的值）
+#   2) JVM 参数：-DDB_PASSWORD=xxx
+# 读取优先级：JVM 参数 > 系统环境变量 > yml 冒号后的默认值
+# 源码中永不出现真实凭据；若需拆分 dev/prod 多环境，再引入 profile 文件即可。
 # ============================================================================
+
+# --------------------------- Web 服务器 ---------------------------
 server:
+  # 服务监听端口号，默认 8080（可通过环境变量 SERVER_PORT 覆盖）
   port: ${SERVER_PORT:8080}
   tomcat:
     # 上传超限时避免连接被重置，便于返回 400 文案
     max-swallow-size: -1
 
+# --------------------------- Spring 核心配置 ---------------------------
 spring:
+  # 应用名称（日志标识等场景使用）
   application:
     name: brix-campus
+
+  # ------------------------- 数据库配置 -------------------------
   datasource:
+    # 使用 Druid 连接池
     type: com.alibaba.druid.pool.DruidDataSource
+    # MySQL 8.x JDBC 驱动
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # allowPublicKeyRetrieval=true & useSSL=false：适配 MySQL 9.x 的 caching_sha2_password
+    # 连接地址：allowPublicKeyRetrieval=true & useSSL=false 适配 MySQL 8.x 的 caching_sha2_password
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:brix_campus}?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    # 数据库账号（本地默认 brix，与 db/schema.sql 里的应用账号一致）
     username: ${DB_USERNAME:brix}
+    # 数据库密码（本地默认 brix123，生产环境必须用环境变量覆盖）
     password: ${DB_PASSWORD:brix123}
     druid:
+      # 启动时初始化的连接数
       initial-size: 5
+      # 池中保持的最小空闲连接数
       min-idle: 5
+      # 池中最大活跃连接数
       max-active: 20
+      # 获取连接的最大等待时间（毫秒），超时抛异常
       max-wait: 60000
+      # 连接有效性检测 SQL
       validation-query: SELECT 1
+      # 空闲时检测（借出/归还时不检测，靠空闲检测兜底，性能更优）
       test-while-idle: true
       test-on-borrow: false
       test-on-return: false
       # 数据库尚未初始化时也允许应用启动（T01 验收点）
       initialization-fail-timeout: -1
+      # 关闭 Druid 自带监控页面（生产安全考虑，如需调试可临时开启）
       stat-view-servlet:
         enabled: false
+
+  # ------------------------- 文件上传 -------------------------
   servlet:
     multipart:
+      # 单个文件大小上限
       max-file-size: 5MB
+      # 单次请求总大小上限（多文件场景）
       max-request-size: 50MB
+
+  # ------------------------- JSON 序列化（Jackson） -------------------------
   jackson:
+    # 日期序列化格式
     date-format: yyyy-MM-dd HH:mm:ss
+    # 时区
     time-zone: Asia/Shanghai
+    # 值为 null 的字段不参与序列化（响应体更干净）
     default-property-inclusion: non_null
+
+  # ------------------------- Spring MVC -------------------------
   mvc:
+    # 找不到处理器时抛异常（交给全局异常处理器统一返回 404 JSON）
     throw-exception-if-no-handler-found: true
   web:
     resources:
+      # 保留静态资源默认映射（如 swagger-ui 等）
       add-mappings: true
 
+# --------------------------- ORM（MyBatis-Plus） ---------------------------
 mybatis-plus:
+  # Mapper XML 文件扫描路径
   mapper-locations: classpath*:/mapper/**/*.xml
+  # 实体类别名扫描包
   type-aliases-package: com.brix.campus.model
   configuration:
+    # 数据库下划线列名自动映射为 Java 驼峰属性
     map-underscore-to-camel-case: true
+    # SQL 日志通过 SLF4J 输出（可通过日志级别控制开关）
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
+    # 关闭 MyBatis-Plus 启动 banner
     banner: false
     db-config:
+      # 主键策略：数据库自增
       id-type: auto
+      # 所有表统一前缀 t_
       table-prefix: t_
+      # 逻辑删除：实体 deleted 字段，1=已删除，0=未删除
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# --------------------------- 业务自定义配置 ---------------------------
+# --------------------------- 业务自定义配置（brix.*） ---------------------------
 brix:
   jwt:
-    # ≥32 字符；本地演示用默认值，生产请通过 JWT_SECRET 覆盖
+    # 签名密钥，必须 ≥32 字符；默认值仅限本地演示，生产环境必须用环境变量覆盖
     secret: ${JWT_SECRET:dev-local-brix-campus-secret-key-0123456789}
+    # Token 有效期（小时）
     expire-hours: ${JWT_EXPIRE_HOURS:24}
   upload:
-    # 相对 backend/ 工作目录；可通过 FILE_UPLOAD_DIR 覆盖
+    # 上传文件保存目录（相对 backend/ 工作目录）
     dir: ${FILE_UPLOAD_DIR:./uploads}
+    # 上传文件大小上限（字节），与 spring.servlet.multipart.max-file-size 保持一致
     max-size: 5242880
   ai:
-    # 留空即「无 Key 模式」：不创建 ChatModel，自动降级为本地规则估价（J03）
+    # DeepSeek API Key；留空即「无 Key 模式」：不创建 ChatModel，
+    # 自动降级为本地规则估价（J03）
     api-key: ${AI_API_KEY:}
     base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
     model: ${AI_MODEL:deepseek-chat}
+    # 每用户每日 AI 调用上限
     daily-limit: ${AI_DAILY_LIMIT:20}
+    # AI 接口超时时间（秒）
     timeout-seconds: ${AI_TIMEOUT_SECONDS:10}
   order:
+    # 订单未支付自动取消时间（分钟）
     unpaid-timeout-minutes: ${ORDER_UNPAID_TIMEOUT_MINUTES:30}
-  trade-code:
-    max-fail: ${TRADE_CODE_MAX_FAIL:5}
 
+# --------------------------- 日志 ---------------------------
 logging:
   level:
     root: info
     com.brix.campus: info
+    # 压制 Spring Security 冗余告警日志
     org.springframework.security: warn

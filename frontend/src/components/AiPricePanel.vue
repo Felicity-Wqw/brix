@@ -14,9 +14,9 @@
     </div>
 
     <div class="ai-panel__form">
-      <el-input v-model="profile.brandModel" placeholder="品牌型号，如 iPad 9 64G" class="ai-panel__input" />
+      <el-input v-model="brandModel" placeholder="品牌型号，如 iPad 9 64G" class="ai-panel__input" />
       <el-input-number v-model="profile.purchaseMonths" :min="0" :max="240" :controls="false" placeholder="购入月数" class="ai-panel__number" />
-      <el-input-number v-model="profile.originalPrice" :min="0" :precision="2" :controls="false" placeholder="原价（可选）" class="ai-panel__number" />
+      <el-input-number v-model="originalPrice" :min="0" :precision="2" :controls="false" placeholder="原价（与左侧表单同步）" class="ai-panel__number" />
       <el-button type="primary" :loading="estimating" @click="doEstimate">AI 帮我定价</el-button>
       <el-button :loading="writing" @click="doCopywriting">生成文案</el-button>
     </div>
@@ -90,10 +90,14 @@ const props = defineProps({
 
 const emit = defineEmits(['apply-price', 'apply-copy'])
 
+/** 品牌型号与发布表单双向同步（v-model:brand-model） */
+const brandModel = defineModel('brandModel', { type: String, default: '' })
+
+/** 原价与发布表单双向同步（v-model:original-price）——估价直接用表单里填的原价 */
+const originalPrice = defineModel('originalPrice', { type: Number, default: null })
+
 const profile = reactive({
-  brandModel: '',
-  purchaseMonths: 12,
-  originalPrice: null
+  purchaseMonths: 12
 })
 
 const estimating = ref(false)
@@ -113,10 +117,10 @@ const confidenceColor = computed(() => {
 function payload() {
   return {
     categoryId: props.categoryId,
-    brandModel: profile.brandModel,
+    brandModel: brandModel.value,
     conditionLevel: props.conditionLevel,
     purchaseMonths: profile.purchaseMonths ?? null,
-    originalPrice: profile.originalPrice ?? null
+    originalPrice: originalPrice.value ?? null
   }
 }
 
@@ -126,7 +130,7 @@ function validate() {
     ElMessage.warning('请先选择分类')
     return false
   }
-  if (!profile.brandModel || !profile.brandModel.trim()) {
+  if (!brandModel.value || !brandModel.value.trim()) {
     ElMessage.warning('请填写品牌型号')
     return false
   }

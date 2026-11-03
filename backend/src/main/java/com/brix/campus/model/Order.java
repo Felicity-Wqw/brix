@@ -9,9 +9,6 @@ import java.time.LocalDateTime;
 
 /**
  * 订单实体（物理表 {@code t_order}）。
- *
- * <p>{@code trade_code} 为面交 6 位确认码（含前导 0，用 String 承载）；
- * {@code code_fail_count} 必须落库，重启后仍能锁定核销入口（PRD F04）。</p>
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -81,19 +78,31 @@ public class Order extends BaseEntity {
     @TableField("close_reason")
     private String closeReason;
 
-    /** 面交确认码 6 位（含前导 0） */
-    @TableField("trade_code")
-    private String tradeCode;
-
-    /** 核销失败次数（持久化，用于 5 次锁定） */
-    @TableField("code_fail_count")
-    private Integer codeFailCount;
-
     /** 面交地点 */
     @TableField("meet_place")
     private String meetPlace;
 
-    /** 买家备注 / 邮寄收货信息占位 */
+    /** 面交时间（买卖双方约定） */
+    @TableField("meet_time")
+    private LocalDateTime meetTime;
+
+    /** 收货人姓名（邮寄单） */
+    @TableField("receiver_name")
+    private String receiverName;
+
+    /** 收货人手机号（邮寄单） */
+    @TableField("receiver_phone")
+    private String receiverPhone;
+
+    /** 收货地址（邮寄单） */
+    @TableField("receiver_address")
+    private String receiverAddress;
+
+    /** 买家备注 */
     @TableField("buyer_note")
     private String buyerNote;
+
+    /** 预付款结算给卖家的时间（确认收货即托管释放；NULL = 尚未结算） */
+    @TableField("settle_time")
+    private LocalDateTime settleTime;
 }

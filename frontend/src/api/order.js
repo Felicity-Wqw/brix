@@ -1,7 +1,7 @@
 import request from '@/utils/request'
 
 /**
- * 订单与面交码接口（E01-E09、F02-F04）。
+ * 订单接口（E01-E09）。
  */
 
 /** 下单（返回 UNPAID 订单，前端跳收银台） */
@@ -19,7 +19,7 @@ export function shipOrder(id) {
   return request.post(`/orders/${id}/ship`)
 }
 
-/** 买家确认收货 */
+/** 买家确认收货 / 面交单确认完成 */
 export function confirmOrder(id) {
   return request.post(`/orders/${id}/confirm`)
 }
@@ -42,14 +42,4 @@ export function fetchSoldOrders(params) {
 /** 订单详情 */
 export function fetchOrderDetail(id) {
   return request.get(`/orders/${id}`)
-}
-
-/** 查看面交确认码（仅买卖双方） */
-export function fetchTradeCode(id) {
-  return request.get(`/orders/${id}/trade-code`)
-}
-
-/** 卖家核销确认码（skipErrorTip：就地展示剩余次数） */
-export function verifyTradeCode(id, code) {
-  return request.post(`/orders/${id}/trade-code/verify`, { code }, { skipErrorTip: true })
 }

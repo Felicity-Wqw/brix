@@ -15,8 +15,13 @@ public class LlmEstimator implements AiEstimator {
     }
 
     @Override
-    public EstimateResult estimate(ItemProfile profile) {
-        return agent.estimate(AiPrompts.estimateUserPrompt(profile));
+    public EstimateResult estimate(ItemProfile profile, String pricingHints) {
+        return agent.estimate(AiPrompts.estimateUserPrompt(profile, pricingHints));
+    }
+
+    @Override
+    public NewPriceHint estimateNewPrice(ItemProfile profile) {
+        return agent.estimateNewPrice(AiPrompts.newPriceUserPrompt(profile));
     }
 
     @Override

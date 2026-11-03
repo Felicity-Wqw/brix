@@ -2,7 +2,7 @@ import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-rou
 import { useAuthStore } from '@/stores/auth'
 
 /**
- * 路由表（19 页 + 404）。
+ * 路由表（12 页 + 404）。
  *
  * - 使用 hash 路由：无需服务端 history 配置（PRD 部署形态为本地裸机双进程）。
  * - 守卫仅作体验层拦截，真正的安全边界在后端接口（架构 5.6）。
@@ -28,13 +28,13 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'home',
         component: () => import('@/views/Home.vue'),
-        meta: { title: '首页' }
+        meta: { requiresAuth: true, allowGuest: true, title: '首页' }
       },
       {
         path: 'items/:id',
         name: 'item-detail',
         component: () => import('@/views/ItemDetail.vue'),
-        meta: { title: '商品详情' }
+        meta: { requiresAuth: true, allowGuest: true, title: '商品详情' }
       },
       {
         path: 'publish',
@@ -79,72 +79,28 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true, title: '我的收藏' }
       },
       {
+        path: 'history',
+        name: 'my-history',
+        component: () => import('@/views/MyBrowseHistory.vue'),
+        meta: { requiresAuth: true, title: '浏览历史' }
+      },
+      {
         path: 'orders',
         name: 'my-orders',
         component: () => import('@/views/MyOrders.vue'),
         meta: { requiresAuth: true, title: '我的订单' }
       },
       {
+        path: 'analysis',
+        name: 'my-analysis',
+        component: () => import('@/views/MyAnalysis.vue'),
+        meta: { requiresAuth: true, title: '数据分析' }
+      },
+      {
         path: 'profile',
         name: 'profile',
         component: () => import('@/views/Profile.vue'),
         meta: { requiresAuth: true, title: '个人中心' }
-      }
-    ]
-  },
-  {
-    path: '/admin/login',
-    name: 'admin-login',
-    component: () => import('@/views/admin/AdminLogin.vue'),
-    meta: { guestOnly: true, title: '后台登录' }
-  },
-  {
-    path: '/admin',
-    component: () => import('@/layout/AdminLayout.vue'),
-    redirect: '/admin/dashboard',
-    children: [
-      {
-        path: 'dashboard',
-        name: 'admin-dashboard',
-        component: () => import('@/views/admin/Dashboard.vue'),
-        meta: { requiresAuth: true, roles: ['OPERATOR'], title: '数据大屏' }
-      },
-      {
-        path: 'users',
-        name: 'admin-users',
-        component: () => import('@/views/admin/AdminUsers.vue'),
-        meta: { requiresAuth: true, roles: ['OPERATOR'], title: '用户管理' }
-      },
-      {
-        path: 'items',
-        name: 'admin-items',
-        component: () => import('@/views/admin/AdminItems.vue'),
-        meta: { requiresAuth: true, roles: ['REVIEWER'], title: '商品审核' }
-      },
-      {
-        path: 'orders',
-        name: 'admin-orders',
-        component: () => import('@/views/admin/AdminOrders.vue'),
-        meta: { requiresAuth: true, roles: ['OPERATOR'], title: '订单管理' }
-      },
-      {
-        path: 'categories',
-        name: 'admin-categories',
-        component: () => import('@/views/admin/AdminCategories.vue'),
-        meta: { requiresAuth: true, roles: ['OPERATOR'], title: '分类管理' }
-      },
-      {
-        path: 'reports',
-        name: 'admin-reports',
-        component: () => import('@/views/admin/AdminReports.vue'),
-        meta: { requiresAuth: true, roles: ['REVIEWER'], title: '举报处理' }
-      },
-      {
-        // 私信记录：纠纷取证（只读），运营与审核员均可见
-        path: 'chats',
-        name: 'admin-chats',
-        component: () => import('@/views/admin/AdminChats.vue'),
-        meta: { requiresAuth: true, roles: ['OPERATOR', 'REVIEWER'], title: '私信记录' }
       }
     ]
   },
@@ -162,13 +118,6 @@ const router = createRouter({
   scrollBehavior: () => ({ left: 0, top: 0 })
 })
 
-/** 各角色默认落地页 */
-function homeOf(role: string): string {
-  if (role === 'OPERATOR') return '/admin/dashboard'
-  if (role === 'REVIEWER') return '/admin/items'
-  return '/'
-}
-
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
@@ -183,29 +132,22 @@ router.beforeEach(async (to) => {
 
   // 2. 仅游客可访问（登录 / 注册）
   if (to.meta.guestOnly && auth.isLogin) {
-    return homeOf(auth.role)
+    return '/'
   }
 
-  // 3. 需要登录
+  // 3. 需要登录：
+  //    - 普通页面（发布/订单/个人中心等）：未登录一律先登录
+  //    - 浏览页面（meta.allowGuest：首页/详情）：登录页点过「游客逛一逛」的可直接浏览
   if (to.meta.requiresAuth && !auth.isLogin) {
+    if (to.meta.allowGuest && auth.isGuestMode) {
+      return true
+    }
     return { path: '/login', query: { redirect: encodeURIComponent(to.fullPath) } }
   }
 
-  // 4. 后台路径：USER 一律拦回后台登录页
-  if (to.path.startsWith('/admin') && to.path !== '/admin/login' && auth.role === 'USER') {
-    auth.clear()
-    return '/admin/login'
-  }
-
-  // 5. 角色不匹配 → 回到该角色首页（REVIEWER 与 OPERATOR 互不越界）
-  const roles = to.meta.roles as string[] | undefined
-  if (roles && roles.length && !roles.includes(auth.role)) {
-    return homeOf(auth.role)
-  }
-
-  // 6. 设置标题
-  const title = (to.meta.title as string) || '校园二手交易平台'
-  document.title = `${title} · Brix Campus Market`
+  // 4. 设置标题
+  const title = (to.meta.title as string) || '物归校园'
+  document.title = `${title} · 物归校园`
   return true
 })
 

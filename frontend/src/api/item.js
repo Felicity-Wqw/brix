@@ -19,6 +19,11 @@ export function fetchItemDetail(id) {
   return request.get(`/items/${id}`)
 }
 
+/** 同类推荐（同子类优先，同父类补足，最多 4 件） */
+export function fetchSimilarItems(id) {
+  return request.get(`/items/${id}/similar`)
+}
+
 /** 我的商品（全部状态） */
 export function fetchMyItems(params) {
   return request.get('/items/mine', { params })

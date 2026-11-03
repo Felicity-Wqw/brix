@@ -54,6 +54,16 @@ public class CommentController {
     }
 
     /**
+     * 我收到的未读留言摘要（导航红点用）：count + 最新未读留言所在商品。
+     *
+     * @return {count, latestItemId}
+     */
+    @GetMapping("/comments/unread-summary")
+    public R<java.util.Map<String, Object>> unreadSummary() {
+        return R.ok(commentService.unreadSummary(SecurityUtils.currentUserId()));
+    }
+
+    /**
      * 删除自己的留言。
      *
      * @param id 留言 ID

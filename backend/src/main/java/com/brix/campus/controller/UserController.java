@@ -1,13 +1,18 @@
 package com.brix.campus.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.common.R;
 import com.brix.campus.model.dto.ChangePasswordDTO;
 import com.brix.campus.model.dto.UpdateProfileDTO;
+import com.brix.campus.model.query.BaseQuery;
 import com.brix.campus.model.query.CommentQuery;
+import com.brix.campus.model.vo.BrowseHistoryVO;
 import com.brix.campus.model.vo.ReviewPageVO;
 import com.brix.campus.model.vo.UploadVO;
+import com.brix.campus.model.vo.UserAnalysisVO;
 import com.brix.campus.model.vo.UserVO;
 import com.brix.campus.security.SecurityUtils;
+import com.brix.campus.service.BrowseHistoryService;
 import com.brix.campus.service.ReviewService;
 import com.brix.campus.service.UserService;
 import jakarta.validation.Valid;
@@ -32,10 +37,13 @@ public class UserController {
 
     private final UserService userService;
     private final ReviewService reviewService;
+    private final BrowseHistoryService browseHistoryService;
 
-    public UserController(UserService userService, ReviewService reviewService) {
+    public UserController(UserService userService, ReviewService reviewService,
+                          BrowseHistoryService browseHistoryService) {
         this.userService = userService;
         this.reviewService = reviewService;
+        this.browseHistoryService = browseHistoryService;
     }
 
     /**
@@ -70,6 +78,27 @@ public class UserController {
     @PostMapping("/me/avatar")
     public R<UploadVO> updateAvatar(@RequestParam("file") MultipartFile file) {
         return R.ok(userService.updateAvatar(SecurityUtils.currentUserId(), file), "头像已更新");
+    }
+
+    /**
+     * 个人买卖可视化分析（G05）：汇总指标 + 分类占比 + 月度趋势。
+     *
+     * @return 买入/卖出两维度统计
+     */
+    @GetMapping("/me/analysis")
+    public R<UserAnalysisVO> myAnalysis() {
+        return R.ok(userService.getMyAnalysis(SecurityUtils.currentUserId()));
+    }
+
+    /**
+     * 我的浏览历史分页（按最近浏览倒序）。
+     *
+     * @param query 分页条件
+     * @return 分页结果
+     */
+    @GetMapping("/me/browse-history")
+    public R<IPage<BrowseHistoryVO>> browseHistory(@Valid BaseQuery query) {
+        return R.ok(browseHistoryService.page(SecurityUtils.currentUserId(), query));
     }
 
     /**

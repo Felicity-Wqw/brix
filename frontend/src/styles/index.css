@@ -1,21 +1,45 @@
 /* ============================================================================
- * 全局样式：reset + 1200px 定宽容器 + 视觉规范 + Element Plus 微调
- * 视觉：主色 #0FA968 / 价格 #FF4D2E / 页面底 #F6F7F9 / 卡片白 + 0.5px 描边
- * 说明：仅 PC 端，不做移动端适配（PRD 1.2、N09）
+ * 全局样式 — 物归校园
+ * 方向：温暖纸感的校园市集（.impeccable.md）
+ *   暖纸底 #f6f4ee / 卡片暖白 #fffdf9 / 墨绿主色 #0e7a50 / 价签橙红 #ff4d2e
+ *   文字墨绿黑 #1c2a24，禁纯黑纯白；圆角 8/14；阴影两层柔和无发光
+ * 说明：仅 PC 端（1280px+），登录/注册页有独立 auth 视觉体系
  * ========================================================================== */
 
 :root {
-  --brix-primary: #0fa968;
-  --brix-primary-light: #e8f7f0;
-  --brix-price: #ff4d2e;
-  --brix-bg: #f6f7f9;
-  --brix-border: rgba(0, 0, 0, 0.06);
-  --brix-text: #1f2329;
-  --brix-text-secondary: #646a73;
-  --brix-text-placeholder: #8f959e;
-  --brix-radius: 10px;
+  /* 品牌色 */
+  --brix-primary: #0e7a50;
+  --brix-primary-strong: #0a5f3e; /* hover/active：压深而非提亮 */
+  --brix-primary-soft: #e7f3ec;   /* 浅绿衬底（选中态、标签底） */
+  --brix-accent: #ff4d2e;         /* 价签橙红：全站唯一强调色 */
+
+  /* 纸感底色与表面 */
+  --brix-bg: #f6f4ee;
+  --brix-surface: #fffdf9;
+  --brix-border: rgba(28, 42, 36, 0.08);
+  --brix-border-strong: rgba(28, 42, 36, 0.16);
+
+  /* 文字 */
+  --brix-text: #1c2a24;
+  --brix-text-secondary: #5c6b63;
+  --brix-text-placeholder: #96a29b;
+
+  /* 形状与阴影 */
+  --brix-radius: 8px;
+  --brix-radius-lg: 14px;
   --brix-container: 1200px;
-  --el-color-primary: #0fa968;
+  --brix-shadow-sm: 0 1px 2px rgba(23, 37, 31, 0.05);
+  --brix-shadow-md: 0 2px 6px rgba(23, 37, 31, 0.06), 0 12px 32px rgba(23, 37, 31, 0.08);
+
+  /* Element Plus 主色系（含 hover/浅色梯度，供 tag/button/pagination 派生） */
+  --el-color-primary: #0e7a50;
+  --el-color-primary-dark-2: #0a5f3e;
+  --el-color-primary-light-3: #3d9a74;
+  --el-color-primary-light-5: #86bfa5;
+  --el-color-primary-light-7: #c2ddcf;
+  --el-color-primary-light-8: #dcebe3;
+  --el-color-primary-light-9: #e7f3ec;
+  --el-border-radius-base: 8px;
 }
 
 * {
@@ -31,7 +55,12 @@ body,
 body {
   margin: 0;
   min-width: 1280px;
-  background-color: var(--brix-bg);
+  /* 全站背景 = 登录页同款浅绿渐变 + 双光斑；fixed 固定视口，长页滚动时光斑不跑位 */
+  background:
+    radial-gradient(900px 500px at 82% 18%, rgba(148, 210, 189, 0.55) 0%, transparent 60%),
+    radial-gradient(760px 520px at 12% 85%, rgba(15, 169, 104, 0.5) 0%, transparent 62%),
+    linear-gradient(160deg, #e9f6ef 0%, #cdeadb 40%, #9fd4bb 78%, #7fbfa3 100%);
+  background-attachment: fixed;
   color: var(--brix-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', sans-serif;
@@ -59,27 +88,34 @@ ul {
   list-style: none;
 }
 
+::selection {
+  background: var(--brix-primary-soft);
+}
+
 /* 定宽容器 */
 .brix-container {
   width: var(--brix-container);
   margin: 0 auto;
 }
 
-/* 卡片 */
+/* 卡片：暖白纸面 + 细描边 + 一层极轻的落影 */
 .brix-card {
-  background: #fff;
+  background: var(--brix-surface);
   border: 0.5px solid var(--brix-border);
-  border-radius: var(--brix-radius);
+  border-radius: var(--brix-radius-lg);
+  box-shadow: var(--brix-shadow-sm);
 }
 
-/* 区块标题 */
+/* 区块标题：小标签在上、标题在下的编辑式排版由各页自行组合；
+   这里保持通用横排，但给标题加一点字距 */
 .brix-section-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 
 .brix-section-title__sub {
@@ -88,10 +124,11 @@ ul {
   color: var(--brix-text-secondary);
 }
 
-/* 价格 */
+/* 价格：橙红价签，数字等宽对齐 */
 .brix-price {
-  color: var(--brix-price);
-  font-weight: 600;
+  color: var(--brix-accent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .brix-price__symbol {
@@ -155,24 +192,35 @@ ul {
 
 .brix-empty__icon {
   font-size: 44px;
-  color: #d9dde3;
+  color: #cfd8d2;
   margin-bottom: 12px;
 }
 
-/* Element Plus 微调 */
-.el-card {
+/* ---------------- Element Plus 精修 ---------------- */
+
+.el-button {
+  font-weight: 600;
   border-radius: var(--brix-radius);
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1); /* ease-out-quart */
 }
 
 .el-button--primary {
   --el-button-bg-color: var(--brix-primary);
   --el-button-border-color: var(--brix-primary);
-  --el-button-hover-bg-color: #12bd75;
-  --el-button-hover-border-color: #12bd75;
+  --el-button-hover-bg-color: var(--brix-primary-strong);
+  --el-button-hover-border-color: var(--brix-primary-strong);
+  --el-button-active-bg-color: #084d33;
+  --el-button-active-border-color: #084d33;
+}
+
+.el-input__wrapper {
+  border-radius: var(--brix-radius);
+  background: #fff;
 }
 
 .el-tag {
-  border-radius: 4px;
+  border-radius: 5px;
+  font-weight: 500;
 }
 
 .el-pagination {
@@ -180,15 +228,23 @@ ul {
   padding: 24px 0 8px;
 }
 
+.el-pagination.is-background .el-pager li.is-active {
+  background-color: var(--brix-primary);
+}
+
 .el-table th.el-table__cell {
-  background-color: #fafbfc;
+  background-color: #faf8f3;
   color: var(--brix-text-secondary);
   font-weight: 500;
 }
 
-/* 页面淡入 */
+.el-dropdown-menu {
+  border-radius: var(--brix-radius);
+}
+
+/* 页面淡入：ease-out-quart */
 .brix-fade-enter-active {
-  transition: opacity 0.18s ease;
+  transition: opacity 0.22s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .brix-fade-enter-from {

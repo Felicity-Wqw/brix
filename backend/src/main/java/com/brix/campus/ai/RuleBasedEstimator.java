@@ -42,7 +42,8 @@ public class RuleBasedEstimator implements AiEstimator {
     }
 
     @Override
-    public EstimateResult estimate(ItemProfile profile) {
+    public EstimateResult estimate(ItemProfile profile, String pricingHints) {
+        // 规则引擎不消费定价参考数据包，忽略 hints
         String categoryName = resolveCategoryName(profile);
         BigDecimal basePrice = basePriceOf(categoryName);
         double conditionFactor = ConditionEnum.factorOf(profile.getConditionLevel());
@@ -166,6 +167,12 @@ public class RuleBasedEstimator implements AiEstimator {
     @Override
     public String source() {
         return SOURCE;
+    }
+
+    @Override
+    public NewPriceHint estimateNewPrice(ItemProfile profile) {
+        // 规则引擎无 LLM 知识能力，不提供新品价锚点
+        return null;
     }
 
     /**

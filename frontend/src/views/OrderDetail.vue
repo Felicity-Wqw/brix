@@ -66,6 +66,19 @@
             <el-icon><Location /></el-icon>
             面交地点：{{ order.meetPlace }}
           </div>
+          <div v-if="order.meetTime" class="order-detail__place">
+            <el-icon><AlarmClock /></el-icon>
+            面交时间：{{ formatTime(order.meetTime, 'YYYY-MM-DD HH:mm') }}
+          </div>
+          <div v-if="order.receiverName" class="order-detail__place">
+            <el-icon><User /></el-icon>
+            收货信息：{{ order.receiverName }} · {{ order.receiverPhone }} · {{ order.receiverAddress }}
+          </div>
+          <div v-if="order.escrowDesc" class="order-detail__place order-detail__escrow" :class="{ 'is-settled': !!order.settleTime }">
+            <el-icon><Wallet /></el-icon>
+            预付款状态：{{ order.escrowDesc }}
+            <span v-if="order.settleTime">（{{ formatTime(order.settleTime, 'YYYY-MM-DD HH:mm') }}）</span>
+          </div>
           <div v-if="order.buyerNote" class="order-detail__note">买家备注：{{ order.buyerNote }}</div>
         </div>
 
@@ -88,15 +101,6 @@
         </div>
       </div>
 
-      <!-- 面交确认码 -->
-      <TradeCodeBox
-        v-if="needTradeCode"
-        :order-id="order.id"
-        :is-seller="order.viewerRole === 'SELLER'"
-        :order-status="order.status"
-        @verified="load"
-      />
-
       <!-- 操作区 -->
       <div class="order-detail__actions">
         <el-button v-if="order.canPay" type="primary" size="large" @click="router.push(`/checkout/${order.id}`)">
@@ -104,7 +108,9 @@
         </el-button>
         <el-button v-if="order.canCancel" size="large" @click="cancel">取消订单</el-button>
         <el-button v-if="order.canShip" type="primary" size="large" @click="ship">已发货</el-button>
-        <el-button v-if="order.canConfirm" type="primary" size="large" @click="confirm">确认收货</el-button>
+        <el-button v-if="order.canConfirm" type="primary" size="large" @click="confirm">
+          {{ order.tradeType === 'MEET' ? '确认完成交易' : '确认收货' }}
+        </el-button>
         <el-button v-if="order.canReview" type="primary" plain size="large" @click="reviewVisible = true">评价卖家</el-button>
         <el-tag v-else-if="order.reviewed" size="large" effect="plain">已评价</el-tag>
       </div>
@@ -120,12 +126,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { AlarmClock, Location, User, Wallet } from '@element-plus/icons-vue'
 import { cancelOrder, confirmOrder, fetchOrderDetail, shipOrder } from '@/api/order'
 import { useAuthStore } from '@/stores/auth'
-import { resolveImage } from '@/utils/format'
+import { formatTime, resolveImage } from '@/utils/format'
 import PriceTag from '@/components/PriceTag.vue'
 import StatusTag from '@/components/StatusTag.vue'
-import TradeCodeBox from '@/components/TradeCodeBox.vue'
 import RateDialog from '@/components/RateDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
@@ -137,11 +143,6 @@ const orderId = String(route.params.id || '')
 const order = ref(null)
 const loading = ref(false)
 const reviewVisible = ref(false)
-
-/** 面交单且已支付才展示确认码区域 */
-const needTradeCode = computed(
-  () => order.value && order.value.tradeType === 'MEET' && order.value.status !== 'UNPAID'
-)
 
 /** 状态提示文案 */
 const statusTip = computed(() => {
@@ -155,8 +156,8 @@ const statusTip = computed(() => {
       return '卖家已发货，请在收到商品并验收后确认收货'
     case 'TO_MEET':
       return order.value.viewerRole === 'BUYER'
-        ? '请线下验货后，把确认码告知卖家完成核销'
-        : '与买家线下面交，验货无误后输入买家口述的确认码完成交易'
+        ? '请与卖家约定时间线下面交，验货无误后确认完成交易'
+        : '与买家线下面交，买家确认后交易完成'
     case 'DONE':
       return '交易已完成，感谢使用校园二手平台'
     case 'CANCELED':
@@ -178,7 +179,7 @@ const timeline = computed(() => {
       time: target.tradeType === 'MEET' ? (target.payTime ? '进行中' : '') : formatLine(target.shipTime)
     },
     {
-      label: target.tradeType === 'MEET' ? '卖家核销确认码' : '买家确认收货',
+      label: target.tradeType === 'MEET' ? '买家确认完成' : '买家确认收货',
       time: formatLine(target.finishTime)
     }
   ]
@@ -222,10 +223,15 @@ async function ship() {
   load()
 }
 
-/** 确认收货 */
+/** 确认收货 / 面交单确认完成 */
 async function confirm() {
+  const isMeet = order.value.tradeType === 'MEET'
   try {
-    await ElMessageBox.confirm('请确认已收到商品且验收无误。', '确认收货', { type: 'info' })
+    await ElMessageBox.confirm(
+      isMeet ? '请确认已与卖家线下面交且验货无误。' : '请确认已收到商品且验收无误。',
+      isMeet ? '确认完成交易' : '确认收货',
+      { type: 'info' }
+    )
   } catch (error) {
     return
   }
@@ -359,6 +365,23 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* 预付款托管状态条 */
+.order-detail__escrow {
+  color: #b25e00;
+  background: #fff7e8;
+  border: 0.5px solid #ffe1b0;
+  border-top: 0.5px solid #ffe1b0;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 12px;
+}
+
+.order-detail__escrow.is-settled {
+  color: var(--brix-primary);
+  background: var(--brix-primary-soft);
+  border-color: rgba(14, 122, 80, 0.25);
 }
 
 .order-detail__party-row {

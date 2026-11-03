@@ -18,3 +18,8 @@ export function createComment(itemId, data) {
 export function deleteComment(id) {
   return request.delete(`/comments/${id}`)
 }
+
+/** 我收到的未读留言摘要（导航红点）：{ count, latestItemId } */
+export function fetchCommentUnreadSummary() {
+  return request.get('/comments/unread-summary')
+}

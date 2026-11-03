@@ -29,4 +29,8 @@ public class ItemComment extends BaseEntity {
 
     /** 内容 1~500 字 */
     private String content;
+
+    /** 卖家是否已读：0 未读（触发导航红点提醒） / 1 已读 */
+    @TableField("is_read")
+    private Integer isRead;
 }

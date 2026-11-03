@@ -2,12 +2,9 @@ package com.brix.campus.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.model.dto.ChatSendDTO;
-import com.brix.campus.model.query.AdminChatQuery;
 import com.brix.campus.model.query.ChatQuery;
-import com.brix.campus.model.vo.AdminChatVO;
 import com.brix.campus.model.vo.ChatMessageVO;
 import com.brix.campus.model.vo.ConversationVO;
-import com.brix.campus.model.vo.OrderChatVO;
 
 import java.util.List;
 
@@ -58,23 +55,4 @@ public interface ChatService {
      * @return 清零后的全局未读数
      */
     long markRead(Long userId, Long peerId);
-
-    /**
-     * 后台查看某个订单买卖双方的私信记录（纠纷取证，只读）。
-     *
-     * <p>优先返回「围绕该商品」的消息；该商品下没有带 {@code item_id} 的消息时，
-     * 退化为返回二人之间的全部消息。无消息返回空列表，不抛 404。</p>
-     *
-     * @param orderId 订单 ID
-     * @return 订单维度会话
-     */
-    OrderChatVO orderChat(Long orderId);
-
-    /**
-     * 后台全平台私信分页检索（只读）。
-     *
-     * @param query 查询条件
-     * @return 分页结果
-     */
-    IPage<AdminChatVO> adminPage(AdminChatQuery query);
 }

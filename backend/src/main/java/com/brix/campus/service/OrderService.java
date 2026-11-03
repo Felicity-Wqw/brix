@@ -6,12 +6,11 @@ import com.brix.campus.model.dto.CancelOrderDTO;
 import com.brix.campus.model.dto.OrderCreateDTO;
 import com.brix.campus.model.dto.PayDTO;
 import com.brix.campus.model.query.OrderQuery;
-import com.brix.campus.model.vo.AdminOrderVO;
 import com.brix.campus.model.vo.OrderDetailVO;
 import com.brix.campus.model.vo.OrderVO;
 
 /**
- * 订单服务（E01-E10 + 后台订单查询 K11）。
+ * 订单服务（E01-E10）。
  */
 public interface OrderService {
 
@@ -25,12 +24,12 @@ public interface OrderService {
     OrderVO create(Long buyerId, OrderCreateDTO dto);
 
     /**
-     * 收银台模拟支付：抢占商品 + 订单流转 + 关闭同商品其它待付款单 + 生成面交码，同一事务。
+     * 收银台模拟支付：抢占商品 + 订单流转 + 关闭同商品其它待付款单，同一事务。
      *
      * @param userId  操作人（买家）
      * @param orderId 订单 ID
      * @param dto     支付方式
-     * @return 支付后的订单（面交单含 tradeCode）
+     * @return 支付后的订单
      */
     OrderVO pay(Long userId, Long orderId, PayDTO dto);
 
@@ -44,7 +43,7 @@ public interface OrderService {
     OrderVO ship(Long userId, Long orderId);
 
     /**
-     * 买家确认收货：{@code TO_RECEIVE → DONE}。
+     * 买家确认完成：邮寄单 {@code TO_RECEIVE → DONE}，面交单 {@code TO_MEET → DONE}。
      *
      * @param userId  操作人（买家）
      * @param orderId 订单 ID
@@ -89,35 +88,6 @@ public interface OrderService {
      * @return 详情
      */
     OrderDetailVO detail(Long userId, String role, Long orderId);
-
-    /**
-     * 后台全平台订单分页。
-     *
-     * @param query 查询条件
-     * @return 分页结果
-     */
-    IPage<AdminOrderVO> adminPage(OrderQuery query);
-
-    /**
-     * 运营重置面交核销失败次数（仅 {@code TO_MEET} 且已锁定可执行）。
-     *
-     * <p>背景：面交码连错 N 次后订单被锁定，卖家无法继续核销，需要运营兜底解锁（BUG-C）。</p>
-     *
-     * @param orderId 订单 ID
-     * @return 重置后的最新订单
-     */
-    AdminOrderVO resetTradeCode(Long orderId);
-
-    /**
-     * 运营强制取消订单（仅 {@code TO_MEET} / {@code TO_SHIP} 可执行）。
-     *
-     * <p>整单一个事务：订单置 {@code CANCELED} + {@code close_reason=SYSTEM} + 写 {@code cancel_time}；
-     * 若商品为 {@code SOLD} 则回滚为 {@code ON_SALE}，与用户侧取消语义一致。</p>
-     *
-     * @param orderId 订单 ID
-     * @return 取消后的最新订单
-     */
-    AdminOrderVO forceCancel(Long orderId);
 
     /**
      * 关闭超时未支付订单（定时任务调用）。

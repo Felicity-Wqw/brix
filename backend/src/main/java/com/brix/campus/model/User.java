@@ -39,7 +39,7 @@ public class User extends BaseEntity {
     /** 简介 */
     private String bio;
 
-    /** 角色：USER / REVIEWER / OPERATOR */
+    /** 角色：USER */
     private String role;
 
     /** 状态：NORMAL / DISABLED */

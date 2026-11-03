@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * 商品接口（B01-B08）。
  */
@@ -37,14 +39,14 @@ public class ItemController {
     }
 
     /**
-     * 发布商品（状态为待审核）。
+     * 发布商品（合规审核通过后直接上架）。
      *
      * @param dto 入参
      * @return 新商品
      */
     @PostMapping
     public R<ItemVO> create(@RequestBody @Valid ItemSaveDTO dto) {
-        return R.ok(itemService.create(SecurityUtils.currentUserId(), dto), "已提交审核");
+        return R.ok(itemService.create(SecurityUtils.currentUserId(), dto), "发布成功");
     }
 
     /**
@@ -93,7 +95,7 @@ public class ItemController {
     @PutMapping("/{id}")
     public R<Void> update(@PathVariable("id") Long id, @RequestBody @Valid ItemSaveDTO dto) {
         itemService.update(SecurityUtils.currentUserId(), id, dto);
-        return R.ok(null, "修改成功，等待重新审核");
+        return R.ok(null, "修改成功");
     }
 
     /**
@@ -118,6 +120,17 @@ public class ItemController {
     @PatchMapping("/{id}/status")
     public R<ItemVO> updateStatus(@PathVariable("id") Long id, @RequestBody @Valid ItemStatusDTO dto) {
         return R.ok(itemService.updateStatus(SecurityUtils.currentUserId(), id, dto), "操作成功");
+    }
+
+    /**
+     * 同类推荐：同子类优先，同父类其他子类补足，按浏览量倒序（无需登录）。
+     *
+     * @param id 商品 ID
+     * @return 推荐商品列表（最多 4 件）
+     */
+    @GetMapping("/{id}/similar")
+    public R<List<ItemVO>> similar(@PathVariable("id") Long id) {
+        return R.ok(itemService.listSimilar(id, 4));
     }
 
     /**

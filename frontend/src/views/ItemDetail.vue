@@ -38,6 +38,10 @@
               <dt>成色</dt>
               <dd><ConditionTag :level="item.conditionLevel" /></dd>
             </div>
+            <div v-if="item.brandModel" class="item-detail__spec">
+              <dt>品牌型号</dt>
+              <dd>{{ item.brandModel }}</dd>
+            </div>
             <div class="item-detail__spec">
               <dt>交易方式</dt>
               <dd><StatusTag kind="trade" :value="item.tradeType" effect="plain" /></dd>
@@ -85,16 +89,70 @@
           <SellerCard :seller="item.seller" />
         </div>
       </div>
+
+      <div v-if="similarItems.length" class="item-detail__similar">
+        <div class="brix-section-title">
+          <span>同类好物</span>
+          <span class="brix-section-title__sub">同分类在售商品，按热度推荐</span>
+        </div>
+        <div class="item-detail__similar-grid">
+          <ItemCard v-for="similar in similarItems" :key="similar.id" :item="similar" />
+        </div>
+      </div>
     </template>
 
     <EmptyState v-else-if="!loading" text="商品不存在或已下架" show-reset @reset="router.push('/')" />
 
     <ReportDialog v-model="reportVisible" :item-id="itemId" />
-    <el-dialog v-model="tradeDialog" title="选择交易方式" width="380px">
-      <el-radio-group v-model="tradeType" class="item-detail__trade">
-        <el-radio value="MEET">面交（推荐，可当面验货）</el-radio>
-        <el-radio v-if="item?.tradeType === 'BOTH'" value="SHIP">邮寄</el-radio>
-      </el-radio-group>
+    <el-dialog v-model="tradeDialog" title="确认订单信息" width="480px">
+      <el-form label-width="86px" label-position="left">
+        <el-form-item v-if="item?.tradeType === 'BOTH'" label="交易方式">
+          <el-radio-group v-model="tradeType">
+            <el-radio value="MEET">面交（可当面验货）</el-radio>
+            <el-radio value="SHIP">邮寄</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <!-- 面单：时间 + 地点 -->
+        <template v-if="tradeType === 'MEET'">
+          <el-form-item label="面交时间" required>
+            <el-date-picker
+              v-model="orderForm.meetTime"
+              type="datetime"
+              placeholder="选择双方方便的时间"
+              format="YYYY-MM-DD HH:mm"
+              :disabled-date="(d) => d.getTime() < Date.now() - 86400000"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="面交地点" required>
+            <el-input v-model="orderForm.meetPlace" maxlength="100" placeholder="如：东校区 3 号宿舍楼下 / 图书馆门口" />
+          </el-form-item>
+        </template>
+
+        <!-- 邮寄：收货三件套 -->
+        <template v-else>
+          <el-form-item label="收货人" required>
+            <el-input v-model="orderForm.receiverName" maxlength="30" placeholder="收货人姓名" />
+          </el-form-item>
+          <el-form-item label="手机号" required>
+            <el-input v-model="orderForm.receiverPhone" maxlength="11" placeholder="11 位手机号" />
+          </el-form-item>
+          <el-form-item label="收货地址" required>
+            <el-input
+              v-model="orderForm.receiverAddress"
+              type="textarea"
+              :rows="2"
+              maxlength="200"
+              placeholder="校区 / 楼栋 / 宿舍号，或校外快递地址"
+            />
+          </el-form-item>
+        </template>
+
+        <el-form-item label="备注">
+          <el-input v-model="orderForm.buyerNote" type="textarea" :rows="2" maxlength="200" placeholder="选填，如「周六下午都在」「希望走菜鸟驿站」" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="tradeDialog = false">取消</el-button>
         <el-button type="primary" :loading="ordering" @click="createOrderNow">确定下单</el-button>
@@ -104,10 +162,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import dayjs from 'dayjs'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchItemDetail } from '@/api/item'
+import { fetchItemDetail, fetchSimilarItems } from '@/api/item'
 import { toggleFavorite as toggleFavoriteApi } from '@/api/favorite'
 import { createOrder } from '@/api/order'
 import { useAuthStore } from '@/stores/auth'
@@ -117,6 +176,7 @@ import ConditionTag from '@/components/ConditionTag.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import SellerCard from '@/components/SellerCard.vue'
 import CommentList from '@/components/CommentList.vue'
+import ItemCard from '@/components/ItemCard.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ReportDialog from '@/components/ReportDialog.vue'
 
@@ -126,22 +186,34 @@ const auth = useAuthStore()
 
 const itemId = String(route.params.id || '')
 const item = ref(null)
+const similarItems = ref([])
 const loading = ref(false)
 const reportVisible = ref(false)
 const tradeDialog = ref(false)
 const tradeType = ref('MEET')
 const ordering = ref(false)
 
+/** 下单表单：面交=时间+地点；邮寄=收货三件套；备注通用 */
+const orderForm = reactive({
+  meetTime: '',
+  meetPlace: '',
+  receiverName: '',
+  receiverPhone: '',
+  receiverAddress: '',
+  buyerNote: ''
+})
+
 const sold = computed(() => item.value?.status === 'SOLD')
 const images = computed(() => (item.value?.images || []).map((image) => image.url))
 const previewList = computed(() => images.value.map((url) => resolveImage(url)))
 
-/** 加载详情（后端顺带浏览量 +1） */
+/** 加载详情（后端顺带浏览量 +1），并拉同类推荐 */
 async function load() {
   loading.value = true
   try {
     item.value = await fetchItemDetail(itemId)
     if (item.value?.tradeType === 'SHIP') tradeType.value = 'SHIP'
+    similarItems.value = (await fetchSimilarItems(itemId)) || []
   } finally {
     loading.value = false
   }
@@ -158,19 +230,53 @@ function wantIt() {
     return
   }
   tradeType.value = item.value?.tradeType === 'SHIP' ? 'SHIP' : 'MEET'
+  // 手机号默认带出个人资料，减少输入
+  if (!orderForm.receiverPhone && auth.user?.phone) {
+    orderForm.receiverPhone = auth.user.phone
+  }
   tradeDialog.value = true
 }
 
-/** 下单并跳收银台 */
+/** 校验并提交订单（面交=时间+地点必填；邮寄=收货三件套必填） */
 async function createOrderNow() {
+  if (tradeType.value === 'MEET') {
+    if (!orderForm.meetTime) {
+      ElMessage.warning('请选择面交时间')
+      return
+    }
+    if (!orderForm.meetPlace.trim()) {
+      ElMessage.warning('请填写面交地点')
+      return
+    }
+  } else {
+    if (!orderForm.receiverName.trim()) {
+      ElMessage.warning('请填写收货人姓名')
+      return
+    }
+    if (!/^\d{11}$/.test(orderForm.receiverPhone.trim())) {
+      ElMessage.warning('请填写 11 位收货人手机号')
+      return
+    }
+    if (!orderForm.receiverAddress.trim()) {
+      ElMessage.warning('请填写收货地址')
+      return
+    }
+  }
   ordering.value = true
   try {
-    const data = await createOrder({
-      itemId,
-      tradeType: tradeType.value,
-      meetPlace: tradeType.value === 'MEET' ? item.value?.campus : null
-    })
-    ElMessage.success('下单成功，请尽快支付')
+    const payload = { itemId, tradeType: tradeType.value }
+    if (tradeType.value === 'MEET') {
+      // 后端 LocalDateTime 反序列化要求 yyyy-MM-dd HH:mm:ss
+      payload.meetTime = dayjs(orderForm.meetTime).format('YYYY-MM-DD HH:mm:ss')
+      payload.meetPlace = orderForm.meetPlace.trim()
+    } else {
+      payload.receiverName = orderForm.receiverName.trim()
+      payload.receiverPhone = orderForm.receiverPhone.trim()
+      payload.receiverAddress = orderForm.receiverAddress.trim()
+    }
+    if (orderForm.buyerNote.trim()) payload.buyerNote = orderForm.buyerNote.trim()
+    const data = await createOrder(payload)
+    ElMessage.success('下单成功，请尽快完成预付款')
     tradeDialog.value = false
     router.push(`/checkout/${data.id}`)
   } finally {
@@ -211,6 +317,23 @@ onMounted(load)
   display: flex;
   gap: 20px;
   align-items: flex-start;
+}
+
+.item-detail__similar {
+  margin-top: 24px;
+}
+
+.item-detail__similar-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 992px) {
+  .item-detail__similar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .item-detail__gallery {

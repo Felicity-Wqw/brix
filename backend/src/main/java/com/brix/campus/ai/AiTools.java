@@ -31,6 +31,22 @@ public class AiTools {
     }
 
     /**
+     * 查询同款商品近 90 天成交统计（推荐优先使用）。
+     *
+     * @param keyword    品牌型号关键词
+     * @param categoryId 分类 ID
+     * @return 一段可读统计文本
+     */
+    @dev.langchain4j.agent.tool.Tool("查询近 90 天成交统计（优先调用）。keyword 必须传能唯一确定具体款式的词"
+            + "（如「iPhone 13」「小黑瓶精华」），优先取待估商品标题的核心词，禁止传品牌名或宽泛品类词。"
+            + "返回统计 + 成交样本标题，请核对样本与待估商品是否为同一具体产品，不同产品必须忽略该数据。")
+    public String soldPriceStats(
+            @dev.langchain4j.agent.tool.P("keyword") String keyword,
+            @dev.langchain4j.agent.tool.P("categoryId") Long categoryId) {
+        return aiRepository.soldPriceStats(keyword);
+    }
+
+    /**
      * 查询同款商品当前在售最低价（元）。
      *
      * @param keyword    品牌型号关键词

@@ -45,6 +45,33 @@ public class AiRepository {
     }
 
     /**
+     * 同款成交统计（笔数 / 中位数 / 最低 / 最高），供 LLM 工具返回一段可读文本。
+     *
+     * @param keyword 标题关键词
+     * @return 统计描述；无数据返回提示文案
+     */
+    public String soldPriceStats(String keyword) {
+        List<BigDecimal> amounts = querySoldAmounts(keyword);
+        if (amounts.isEmpty()) {
+            return "近 90 天无同款成交记录（返回 0 笔属正常，请勿为此放宽关键词重查），"
+                    + "请改用「原价 × 成色折价系数」估算。";
+        }
+        BigDecimal median = soldMedianPrice(keyword, null);
+        BigDecimal min = amounts.stream().min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+        BigDecimal max = amounts.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+        StringBuilder sb = new StringBuilder();
+        sb.append("近 90 天同款成交 ").append(amounts.size()).append(" 笔：中位数 ¥").append(median)
+          .append("，最低 ¥").append(min).append("，最高 ¥").append(max).append("。");
+        // 返回成交样本标题：让模型核对成交与待估商品是否同一具体产品（同品牌不同产品价格可能差数倍）
+        List<String> titles = itemMapper.selectSoldTitles(normalize(keyword));
+        if (titles != null && !titles.isEmpty()) {
+            sb.append("成交样本标题：").append(String.join("；", titles))
+              .append("。请逐一核对与待估商品是否为同一具体产品，不同产品请忽略该成交数据。");
+        }
+        return sb.toString();
+    }
+
+    /**
      * 同款成交笔数。
      *
      * @param keyword 标题关键词

@@ -2,94 +2,65 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.brix.campus.mapper.OrderMapper">
 
-    <!-- 后台全平台订单分页：状态 + 关键词（订单号/商品标题/买卖家用户名） -->
-    <select id="selectAdminPage" resultType="com.brix.campus.model.vo.AdminOrderVO">
-        SELECT o.id             AS id,
-               o.order_no       AS orderNo,
-               o.item_id        AS itemId,
-               o.item_title     AS itemTitle,
-               o.item_cover     AS itemCover,
-               o.amount         AS amount,
-               o.buyer_id       AS buyerId,
-               bu.username      AS buyerUsername,
-               bu.nickname      AS buyerNickname,
-               o.seller_id      AS sellerId,
-               su.username      AS sellerUsername,
-               su.nickname      AS sellerNickname,
-               o.pay_method     AS payMethod,
-               o.status         AS status,
-               o.trade_type     AS tradeType,
-               o.created_at     AS createdAt,
-               o.pay_time       AS payTime
-          FROM t_order o
-          LEFT JOIN t_user bu ON bu.id = o.buyer_id
-          LEFT JOIN t_user su ON su.id = o.seller_id
-         WHERE o.deleted = 0
-        <if test="q.status != null and q.status != ''">
-            AND o.status = #{q.status}
-        </if>
-        <if test="q.keyword != null and q.keyword != ''">
-            AND (o.order_no LIKE CONCAT('%', #{q.keyword}, '%')
-                 OR o.item_title LIKE CONCAT('%', #{q.keyword}, '%')
-                 OR bu.username LIKE CONCAT('%', #{q.keyword}, '%')
-                 OR su.username LIKE CONCAT('%', #{q.keyword}, '%'))
-        </if>
-         ORDER BY o.created_at DESC, o.id DESC
+    <!-- 已完成订单 + 角色过滤的公共条件：
+         role=BUYER  → 当前用户是买家（我买的东西）
+         role=SELLER → 当前用户是卖家（我卖出的东西） -->
+    <sql id="doneScope">
+        o.deleted = 0
+        AND o.status = 'DONE'
+        AND i.deleted = 0
+        <choose>
+            <when test="role == 'SELLER'">AND o.seller_id = #{userId}</when>
+            <otherwise>AND o.buyer_id = #{userId}</otherwise>
+        </choose>
+    </sql>
+
+    <!-- 汇总指标：笔数 / 总金额 / 均价 / 最大单笔 / 分类数 / （卖家）平均成交天数 -->
+    <select id="selectDoneOrderSummary"
+            resultType="com.brix.campus.model.vo.UserAnalysisVO$SummaryRow">
+        SELECT
+            COUNT(*)                                                        AS orderCount,
+            IFNULL(SUM(o.amount), 0)                                        AS totalAmount,
+            IFNULL(ROUND(AVG(o.amount), 2), 0)                              AS avgAmount,
+            IFNULL(MAX(o.amount), 0)                                        AS maxAmount,
+            COUNT(DISTINCT i.category_id)                                   AS categoryCount
+            <if test="role == 'SELLER'">
+            ,
+            ROUND(AVG(DATEDIFF(o.created_at, i.created_at)), 1)             AS avgDaysToSell
+            </if>
+        FROM t_order o
+        LEFT JOIN t_item i ON i.id = o.item_id
+        WHERE <include refid="doneScope"/>
     </select>
 
-    <!-- 后台单条订单：与列表同一投影，运营操作后回显最新数据 -->
-    <select id="selectAdminById" resultType="com.brix.campus.model.vo.AdminOrderVO">
-        SELECT o.id             AS id,
-               o.order_no       AS orderNo,
-               o.item_id        AS itemId,
-               o.item_title     AS itemTitle,
-               o.item_cover     AS itemCover,
-               o.amount         AS amount,
-               o.buyer_id       AS buyerId,
-               bu.username      AS buyerUsername,
-               bu.nickname      AS buyerNickname,
-               o.seller_id      AS sellerId,
-               su.username      AS sellerUsername,
-               su.nickname      AS sellerNickname,
-               o.pay_method     AS payMethod,
-               o.status         AS status,
-               o.trade_type     AS tradeType,
-               o.created_at     AS createdAt,
-               o.pay_time       AS payTime
-          FROM t_order o
-          LEFT JOIN t_user bu ON bu.id = o.buyer_id
-          LEFT JOIN t_user su ON su.id = o.seller_id
-         WHERE o.deleted = 0
-           AND o.id = #{id}
+    <!-- 分类占比：金额降序 -->
+    <select id="selectDoneOrderCategoryStats"
+            resultType="com.brix.campus.model.vo.UserAnalysisVO$CategorySlice">
+        SELECT
+            i.category_id                                   AS categoryId,
+            IFNULL(c.name, '其他')                          AS categoryName,
+            COUNT(*)                                        AS orderCount,
+            IFNULL(SUM(o.amount), 0)                        AS totalAmount
+        FROM t_order o
+        LEFT JOIN t_item i ON i.id = o.item_id
+        LEFT JOIN t_category c ON c.id = i.category_id AND c.deleted = 0
+        WHERE <include refid="doneScope"/>
+        GROUP BY i.category_id, c.name
+        ORDER BY totalAmount DESC
     </select>
 
-    <!-- 累计成交额：仅统计已支付及之后的状态（PRD 8-#6 口径） -->
-    <select id="sumPaidAmount" resultType="java.math.BigDecimal">
-        SELECT COALESCE(SUM(o.amount), 0)
-          FROM t_order o
-         WHERE o.deleted = 0
-           AND o.status IN ('TO_SHIP', 'TO_RECEIVE', 'TO_MEET', 'DONE')
-    </select>
-
-    <!-- 今日订单数 -->
-    <select id="countToday" resultType="java.lang.Long">
-        SELECT COUNT(*)
-          FROM t_order
-         WHERE deleted = 0
-           AND created_at &gt;= CURDATE()
-           AND created_at &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-    </select>
-
-    <!-- 按天统计订单数（趋势图，缺日由 Java 补 0） -->
-    <select id="countDailyOrders" resultType="map">
-        SELECT DATE_FORMAT(o.created_at, '%Y-%m-%d') AS date,
-               COUNT(*)                              AS `count`
-          FROM t_order o
-         WHERE o.deleted = 0
-           AND o.created_at &gt;= #{start}
-           AND o.created_at &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
-         GROUP BY DATE_FORMAT(o.created_at, '%Y-%m-%d')
-         ORDER BY date ASC
+    <!-- 月度趋势：月份升序 -->
+    <select id="selectDoneOrderMonthlyStats"
+            resultType="com.brix.campus.model.vo.UserAnalysisVO$MonthlyPoint">
+        SELECT
+            DATE_FORMAT(o.created_at, '%Y-%m')              AS month,
+            COUNT(*)                                        AS orderCount,
+            IFNULL(SUM(o.amount), 0)                        AS totalAmount
+        FROM t_order o
+        LEFT JOIN t_item i ON i.id = o.item_id
+        WHERE <include refid="doneScope"/>
+        GROUP BY DATE_FORMAT(o.created_at, '%Y-%m')
+        ORDER BY month ASC
     </select>
 
 </mapper>

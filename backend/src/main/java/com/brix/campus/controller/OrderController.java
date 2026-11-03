@@ -6,16 +6,13 @@ import com.brix.campus.model.dto.CancelOrderDTO;
 import com.brix.campus.model.dto.OrderCreateDTO;
 import com.brix.campus.model.dto.PayDTO;
 import com.brix.campus.model.dto.ReviewCreateDTO;
-import com.brix.campus.model.dto.TradeCodeVerifyDTO;
 import com.brix.campus.model.query.OrderQuery;
 import com.brix.campus.model.vo.OrderDetailVO;
 import com.brix.campus.model.vo.OrderVO;
 import com.brix.campus.model.vo.ReviewVO;
-import com.brix.campus.model.vo.TradeCodeVO;
 import com.brix.campus.security.SecurityUtils;
 import com.brix.campus.service.OrderService;
 import com.brix.campus.service.ReviewService;
-import com.brix.campus.service.TradeCodeService;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 订单接口（E01-E09、F02-F04、G01）。
+ * 订单接口（E01-E09、G01）。
  */
 @RestController
 @RequestMapping("/orders")
@@ -34,14 +31,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final OrderService orderService;
-    private final TradeCodeService tradeCodeService;
     private final ReviewService reviewService;
 
     public OrderController(OrderService orderService,
-                           TradeCodeService tradeCodeService,
                            ReviewService reviewService) {
         this.orderService = orderService;
-        this.tradeCodeService = tradeCodeService;
         this.reviewService = reviewService;
     }
 
@@ -136,31 +130,6 @@ public class OrderController {
     public R<OrderDetailVO> detail(@PathVariable("id") Long id) {
         return R.ok(orderService.detail(SecurityUtils.currentUserId(),
                 SecurityUtils.currentRoleOrNull(), id));
-    }
-
-    /**
-     * 查看面交确认码（仅买卖双方）。
-     *
-     * @param id 订单 ID
-     * @return 确认码信息
-     */
-    @GetMapping("/{id}/trade-code")
-    public R<TradeCodeVO> viewTradeCode(@PathVariable("id") Long id) {
-        return R.ok(tradeCodeService.view(SecurityUtils.currentUserId(), id));
-    }
-
-    /**
-     * 卖家核销确认码。
-     *
-     * @param id  订单 ID
-     * @param dto 6 位确认码
-     * @return 核销结果
-     */
-    @PostMapping("/{id}/trade-code/verify")
-    public R<TradeCodeVO> verifyTradeCode(@PathVariable("id") Long id,
-                                          @RequestBody @Valid TradeCodeVerifyDTO dto) {
-        return R.ok(tradeCodeService.verify(SecurityUtils.currentUserId(), id, dto.getCode()),
-                "核销成功，交易完成");
     }
 
     /**

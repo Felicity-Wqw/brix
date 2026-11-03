@@ -18,6 +18,9 @@ public class CategoryVO implements Serializable {
     /** 分类名称 */
     private String name;
 
+    /** 父分类 ID，0=一级分类 */
+    private Long parentId;
+
     /** 图标名 */
     private String icon;
 

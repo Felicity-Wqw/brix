@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import request from '@/utils/request'
-import { ADMIN_MENUS } from '@/constants'
 
 /** 用户信息（id 为字符串：后端 Long → String） */
 export interface UserInfo {
@@ -12,7 +11,7 @@ export interface UserInfo {
   campus?: string
   phone?: string
   bio?: string
-  role: 'USER' | 'REVIEWER' | 'OPERATOR'
+  role: 'USER'
   roleDesc?: string
   status: 'NORMAL' | 'DISABLED'
   statusDesc?: string
@@ -25,19 +24,10 @@ export interface UserInfo {
   }
 }
 
-/** 后台菜单项 */
-export interface MenuItem {
-  key: string
-  title: string
-  path: string
-  icon: string
-}
-
 /** 登录返回体 */
 interface LoginResult {
   token: string
   user: UserInfo
-  menus: MenuItem[]
 }
 
 /** 登录入参 */
@@ -48,47 +38,40 @@ export interface LoginPayload {
 
 const TOKEN_KEY = 'brix_token'
 const USER_KEY = 'brix_user'
+/** 游客访问标记：登录页点「游客逛一逛」后写入，登录/注册/退出时清除 */
+const GUEST_KEY = 'brix_guest_mode'
 
 /**
  * 只保留一个 store：认证态。
- * token 与 user 持久化到 localStorage（刷新保持登录）；menus 与 unreadCount 不持久化。
+ * token 与 user 持久化到 localStorage（刷新保持登录）；unreadCount 不持久化。
  */
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: (localStorage.getItem(TOKEN_KEY) || '') as string,
     user: null as UserInfo | null,
-    menus: [] as MenuItem[],
-    unreadCount: 0
+    unreadCount: 0,
+    /** 我发布的商品上收到的未读留言数（导航红点） */
+    commentUnread: 0
   }),
 
   getters: {
-    /** 当前角色码 */
-    role: (state): string => state.user?.role || '',
     /** 是否已登录 */
     isLogin: (state): boolean => !!state.token,
-    /** 是否后台角色 */
-    isAdmin: (state): boolean => {
-      const role = state.user?.role
-      return role === 'REVIEWER' || role === 'OPERATOR'
-    }
+
+    /** 当前角色（未登录为空串；本平台仅 USER） */
+    role: (state): string => state.user?.role || '',
+
+    /** 是否处于游客浏览模式（未登录但选择先逛逛） */
+    isGuestMode: (): boolean => localStorage.getItem(GUEST_KEY) === '1'
   },
 
   actions: {
     /**
-     * 前台登录。
+     * 登录。
      * @param payload 账号密码
      */
     async login(payload: LoginPayload): Promise<void> {
       const data = (await request.post('/auth/login', payload)) as LoginResult
-      this.applyLogin(data)
-    },
-
-    /**
-     * 后台登录。
-     * @param payload 账号密码
-     */
-    async adminLogin(payload: LoginPayload): Promise<void> {
-      const data = (await request.post('/admin/login', payload)) as LoginResult
       this.applyLogin(data)
     },
 
@@ -108,16 +91,14 @@ export const useAuthStore = defineStore('auth', {
     applyLogin(data: LoginResult): void {
       this.token = data.token
       this.user = data.user
-      this.menus = data.menus && data.menus.length ? data.menus : this.rebuildMenus(data.user.role)
       localStorage.setItem(TOKEN_KEY, data.token)
       localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+      localStorage.removeItem(GUEST_KEY) // 登录/注册成功即退出游客模式
     },
 
-    /** 刷新页面后按 role 本地重建后台菜单 */
-    rebuildMenus(role: string): MenuItem[] {
-      if (role === 'OPERATOR') return [...ADMIN_MENUS.OPERATOR]
-      if (role === 'REVIEWER') return [...ADMIN_MENUS.REVIEWER]
-      return []
+    /** 进入游客浏览模式（仅可浏览页，发布/下单仍需登录） */
+    enterGuestMode(): void {
+      localStorage.setItem(GUEST_KEY, '1')
     },
 
     /** 拉取当前用户信息（含个人数据统计） */
@@ -125,14 +106,16 @@ export const useAuthStore = defineStore('auth', {
       const data = (await request.get('/auth/me')) as UserInfo
       this.user = data
       localStorage.setItem(USER_KEY, JSON.stringify(data))
-      if (!this.menus.length) {
-        this.menus = this.rebuildMenus(data.role)
-      }
     },
 
     /** 设置全局未读数 */
     setUnread(count: number): void {
       this.unreadCount = Math.max(0, Number(count) || 0)
+    },
+
+    /** 设置商品留言未读数（导航红点） */
+    setCommentUnread(count: number): void {
+      this.commentUnread = Math.max(0, Number(count) || 0)
     },
 
     /** 未读数 +1 */
@@ -144,10 +127,11 @@ export const useAuthStore = defineStore('auth', {
     clear(): void {
       this.token = ''
       this.user = null
-      this.menus = []
       this.unreadCount = 0
+      this.commentUnread = 0
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
+      localStorage.removeItem(GUEST_KEY)
     },
 
     /** 退出登录 */

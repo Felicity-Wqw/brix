@@ -33,7 +33,7 @@ class OrderPayTransactionTest {
 
     @Test
     @Transactional
-    @DisplayName("支付成功：订单转待发货、商品售出、面交码生成、兄弟单被关闭")
+    @DisplayName("支付成功：订单转待面交、商品售出、兄弟单被关闭")
     void pay_success_updatesOrderItemAndSiblingOrders() {
         OrderCreateDTO dto = new OrderCreateDTO();
         dto.setItemId(1L);
@@ -47,8 +47,6 @@ class OrderPayTransactionTest {
 
         Assertions.assertEquals(OrderStatusEnum.TO_MEET.getCode(), paid.getStatus(),
                 "面交单支付后应进入 TO_MEET");
-        Assertions.assertNotNull(paid.getTradeCode(), "面交单支付后必须生成 6 位确认码");
-        Assertions.assertEquals(6, paid.getTradeCode().length(), "确认码长度必须为 6");
     }
 
     @Test

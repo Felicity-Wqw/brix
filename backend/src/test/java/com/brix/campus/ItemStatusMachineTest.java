@@ -30,7 +30,7 @@ class ItemStatusMachineTest {
 
     @Test
     @Transactional
-    @DisplayName("编辑商品：状态一律回到待审核")
+    @DisplayName("编辑商品：状态保持上架")
     void update_resetsStatusToPending() {
         ItemSaveDTO dto = new ItemSaveDTO();
         dto.setTitle("iPad 9代 64G WiFi版 国行深空灰（降价）");
@@ -45,8 +45,8 @@ class ItemStatusMachineTest {
         dto.setImages(new ArrayList<>());
 
         itemService.update(4L, 1L, dto);
-        Assertions.assertEquals("PENDING", itemService.getEntity(1L).getStatus(),
-                "编辑后状态必须回到 PENDING");
+        Assertions.assertEquals("ON_SALE", itemService.getEntity(1L).getStatus(),
+                "编辑后状态必须保持 ON_SALE");
     }
 
     @Test
@@ -70,13 +70,13 @@ class ItemStatusMachineTest {
 
     @Test
     @Transactional
-    @DisplayName("已下架商品重新上架：回到待审核而非直接上架")
+    @DisplayName("已下架商品重新上架：直接回到上架状态")
     void updateStatus_relist_goesToPending() {
         ItemStatusDTO dto = new ItemStatusDTO();
         dto.setAction("ON_SALE");
         ItemVO vo = itemService.updateStatus(6L, 22L, dto);
-        Assertions.assertEquals("PENDING", vo.getStatus(),
-                "重新上架必须重新审核（PENDING）");
+        Assertions.assertEquals("ON_SALE", vo.getStatus(),
+                "重新上架应直接 ON_SALE");
     }
 
     @Test

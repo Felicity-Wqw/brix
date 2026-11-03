@@ -37,4 +37,12 @@ public interface CommentService {
      * @param commentId 留言 ID
      */
     void delete(Long userId, Long commentId);
+
+    /**
+     * 我收到的未读留言：统计 + 最新未读留言所在商品（导航红点用）。
+     *
+     * @param sellerId 卖家 ID（我发布的商品）
+     * @return {count, latestItemId}；count 为 0 时 latestItemId 为 null
+     */
+    java.util.Map<String, Object> unreadSummary(Long sellerId);
 }

@@ -18,6 +18,15 @@ public interface ItemEstimationAgent {
     EstimateResult estimate(@UserMessage String userPrompt);
 
     /**
+     * 新品原价查询（估价第一阶段：凭模型知识给出全新渠道参考价区间）。
+     *
+     * @param userPrompt 用户提示词
+     * @return 新品价区间 + 依据
+     */
+    @SystemMessage(AiPrompts.NEW_PRICE_SYSTEM)
+    NewPriceHint estimateNewPrice(@UserMessage String userPrompt);
+
+    /**
      * 一键生成标题与描述。
      *
      * @param userPrompt 用户提示词

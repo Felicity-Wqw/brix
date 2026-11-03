@@ -10,7 +10,6 @@ import com.brix.campus.model.dto.RegisterDTO;
 import com.brix.campus.model.enums.RoleEnum;
 import com.brix.campus.model.enums.UserStatusEnum;
 import com.brix.campus.model.vo.LoginVO;
-import com.brix.campus.model.vo.MenuVO;
 import com.brix.campus.model.vo.UserVO;
 import com.brix.campus.security.JwtUtil;
 import com.brix.campus.service.AuthService;
@@ -18,9 +17,6 @@ import com.brix.campus.service.UserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 认证服务实现。
@@ -74,15 +70,6 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         return buildLoginVO(user);
     }
 
-    @Override
-    public LoginVO adminLogin(LoginDTO dto) {
-        User user = loadForLogin(dto);
-        if (!RoleEnum.isAdmin(user.getRole())) {
-            throw BusinessException.param("无后台权限");
-        }
-        return buildLoginVO(user);
-    }
-
     /**
      * 账号密码校验（不区分账号是否存在，统一提示）。
      *
@@ -103,7 +90,7 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
     }
 
     /**
-     * 组装登录返回体：token + 用户信息 + 按角色过滤的菜单。
+     * 组装登录返回体：token + 用户信息。
      *
      * @param user 用户实体
      * @return 登录信息
@@ -115,34 +102,6 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
         LoginVO vo = new LoginVO();
         vo.setToken(token);
         vo.setUser(userVO);
-        vo.setMenus(buildMenus(user.getRole()));
         return vo;
-    }
-
-    /**
-     * 按角色返回后台菜单（前端刷新时按 role 本地重建同一份常量，架构 4.1 注）。
-     *
-     * @param role 角色码
-     * @return 菜单列表；USER 返回空列表
-     */
-    private List<MenuVO> buildMenus(String role) {
-        List<MenuVO> menus = new ArrayList<>();
-        if (RoleEnum.OPERATOR.getCode().equals(role)) {
-            menus.add(new MenuVO("dashboard", "数据大屏", "/admin/dashboard", "DataLine"));
-            menus.add(new MenuVO("users", "用户管理", "/admin/users", "User"));
-            menus.add(new MenuVO("orders", "订单管理", "/admin/orders", "List"));
-            menus.add(new MenuVO("categories", "分类管理", "/admin/categories", "Menu"));
-            // 私信记录：纠纷取证（只读），运营与审核员均可见（K13）
-            menus.add(new MenuVO("chats", "私信记录", "/admin/chats", "ChatDotRound"));
-            return menus;
-        }
-        if (RoleEnum.REVIEWER.getCode().equals(role)) {
-            menus.add(new MenuVO("items", "商品审核", "/admin/items", "Goods"));
-            menus.add(new MenuVO("reports", "举报处理", "/admin/reports", "Warning"));
-            // 私信记录：纠纷取证（只读），运营与审核员均可见（K13）
-            menus.add(new MenuVO("chats", "私信记录", "/admin/chats", "ChatDotRound"));
-            return menus;
-        }
-        return menus;
     }
 }

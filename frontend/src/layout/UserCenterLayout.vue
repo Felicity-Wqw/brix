@@ -53,7 +53,9 @@ const auth = useAuthStore()
 const menus = [
   { path: '/my/items', label: '我的商品', icon: 'Goods' },
   { path: '/my/favorites', label: '我的收藏', icon: 'Star' },
+  { path: '/my/history', label: '浏览历史', icon: 'View' },
   { path: '/my/orders', label: '我的订单', icon: 'List' },
+  { path: '/my/analysis', label: '数据分析', icon: 'TrendCharts' },
   { path: '/my/profile', label: '个人资料', icon: 'User' }
 ]
 </script>

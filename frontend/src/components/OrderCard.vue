@@ -26,6 +26,13 @@
             <el-icon><Location /></el-icon>
             {{ order.meetPlace }}
           </span>
+          <span v-if="order.meetTime" class="order-card__place">
+            <el-icon><AlarmClock /></el-icon>
+            {{ formatTime(order.meetTime, 'MM-DD HH:mm') }}
+          </span>
+          <span v-if="order.escrowDesc" class="order-card__escrow" :class="{ 'is-settled': !!order.settleTime }">
+            {{ order.escrowDesc }}
+          </span>
         </div>
         <div class="order-card__counterpart">
           {{ perspective === 'buy' ? '卖家' : '买家' }}：
@@ -44,13 +51,8 @@
       <el-button v-if="order.canPay" type="primary" size="small" @click="emit('pay', order)">去支付</el-button>
       <el-button v-if="order.canCancel" size="small" @click="emit('cancel', order)">取消订单</el-button>
       <el-button v-if="order.canShip" type="primary" size="small" @click="emit('ship', order)">已发货</el-button>
-      <el-button v-if="order.canConfirm" type="primary" size="small" @click="emit('confirm', order)">确认收货</el-button>
-      <el-button
-        v-if="order.status === 'TO_MEET'"
-        size="small"
-        @click="emit('trade-code', order)"
-      >
-        {{ perspective === 'buy' ? '查看确认码' : '核销确认码' }}
+      <el-button v-if="order.canConfirm" type="primary" size="small" @click="emit('confirm', order)">
+        {{ order.tradeType === 'MEET' ? '确认完成' : '确认收货' }}
       </el-button>
       <el-button v-if="order.canReview" type="primary" plain size="small" @click="emit('review', order)">评价</el-button>
       <el-tag v-else-if="order.reviewed" size="small" effect="plain">已评价</el-tag>
@@ -69,7 +71,7 @@ defineProps({
   perspective: { type: String, default: 'buy' }
 })
 
-const emit = defineEmits(['detail', 'pay', 'cancel', 'ship', 'confirm', 'review', 'trade-code'])
+const emit = defineEmits(['detail', 'pay', 'cancel', 'ship', 'confirm', 'review'])
 </script>
 
 <style scoped>
@@ -158,6 +160,20 @@ const emit = defineEmits(['detail', 'pay', 'cancel', 'ship', 'confirm', 'review'
   display: inline-flex;
   align-items: center;
   gap: 2px;
+}
+
+/* 预付款托管徽标 */
+.order-card__escrow {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #fff7e8;
+  color: #b25e00;
+  font-size: 11px;
+}
+
+.order-card__escrow.is-settled {
+  background: var(--brix-primary-soft);
+  color: var(--brix-primary);
 }
 
 .order-card__counterpart {

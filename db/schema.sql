@@ -45,6 +45,7 @@ DROP TABLE IF EXISTS t_category;
 CREATE TABLE t_category (
   id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   name       VARCHAR(30)     NOT NULL           COMMENT '分类名',
+  parent_id  BIGINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '父分类 ID，0=一级分类',
   icon       VARCHAR(50)     NOT NULL DEFAULT '' COMMENT '图标',
   sort       INT             NOT NULL DEFAULT 0  COMMENT '升序',
   deleted    TINYINT         NOT NULL DEFAULT 0,
@@ -52,8 +53,9 @@ CREATE TABLE t_category (
   updated_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_name (name),
+  KEY idx_parent (parent_id),
   KEY idx_sort (sort)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分类';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分类（两级）';
 
 -- ---------------------------------------------------------------- 3. 商品
 DROP TABLE IF EXISTS t_item;
@@ -72,10 +74,8 @@ CREATE TABLE t_item (
   cover_image     VARCHAR(255)    NOT NULL DEFAULT ''     COMMENT '首图',
   view_count      INT             NOT NULL DEFAULT 0,
   favorite_count  INT             NOT NULL DEFAULT 0,
-  reject_reason   VARCHAR(200)    DEFAULT NULL            COMMENT '审核拒绝原因',
+  brand_model     VARCHAR(60)     DEFAULT NULL            COMMENT '品牌型号',
   seller_id       BIGINT UNSIGNED NOT NULL,
-  audited_by      BIGINT UNSIGNED DEFAULT NULL,
-  audited_at      DATETIME        DEFAULT NULL,
   deleted         TINYINT         NOT NULL DEFAULT 0,
   created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -99,6 +99,20 @@ CREATE TABLE t_item_image (
   KEY idx_item_sort (item_id, sort)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商品图片';
 
+-- ---------------------------------------------------------------- 4.1 浏览历史
+DROP TABLE IF EXISTS t_browse_history;
+CREATE TABLE t_browse_history (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  user_id    BIGINT UNSIGNED NOT NULL                COMMENT '浏览者',
+  item_id    BIGINT UNSIGNED NOT NULL                COMMENT '商品',
+  deleted    TINYINT         NOT NULL DEFAULT 0,
+  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_user_item (user_id, item_id),
+  KEY idx_user_time (user_id, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='浏览历史（每用户每商品一条，重复浏览刷新时间）';
+
 -- ---------------------------------------------------------------- 5. 收藏
 DROP TABLE IF EXISTS t_favorite;
 CREATE TABLE t_favorite (
@@ -119,6 +133,7 @@ CREATE TABLE t_item_comment (
   user_id    BIGINT UNSIGNED NOT NULL,
   parent_id  BIGINT UNSIGNED DEFAULT NULL COMMENT '空=一级；非空=回复（仅一层）',
   content    VARCHAR(500)    NOT NULL,
+  is_read    TINYINT         NOT NULL DEFAULT 1 COMMENT '卖家是否已读：0 未读 / 1 已读（历史数据默认已读）',
   deleted    TINYINT         NOT NULL DEFAULT 0,
   created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -147,10 +162,13 @@ CREATE TABLE t_order (
   finish_time    DATETIME        DEFAULT NULL,
   cancel_time    DATETIME        DEFAULT NULL,
   close_reason   VARCHAR(20)     DEFAULT NULL            COMMENT 'TIMEOUT/BUYER_CANCEL/SELLER_CANCEL/SYSTEM',
-  trade_code     CHAR(6)         DEFAULT NULL            COMMENT '面交 6 位码（含前导 0）',
-  code_fail_count INT            NOT NULL DEFAULT 0      COMMENT '核销失败次数（持久化）',
   meet_place     VARCHAR(100)    DEFAULT NULL            COMMENT '面交地点',
-  buyer_note     VARCHAR(200)    DEFAULT NULL            COMMENT '买家备注/收货占位',
+  meet_time      DATETIME        DEFAULT NULL            COMMENT '面交时间（面交单）',
+  receiver_name  VARCHAR(30)     DEFAULT NULL            COMMENT '收货人姓名（邮寄单）',
+  receiver_phone VARCHAR(20)     DEFAULT NULL            COMMENT '收货人手机号（邮寄单）',
+  receiver_address VARCHAR(200)  DEFAULT NULL            COMMENT '收货地址（邮寄单）',
+  settle_time    DATETIME        DEFAULT NULL            COMMENT '预付款结算给卖家时间（确认收货即释放托管）',
+  buyer_note     VARCHAR(200)    DEFAULT NULL            COMMENT '买家备注',
   deleted        TINYINT         NOT NULL DEFAULT 0,
   created_at     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

@@ -33,6 +33,20 @@ public final class AiResultSanitizer {
      * @return 清洗后的结果（永不为 null 且关键字段非空）
      */
     public static EstimateResult sanitize(EstimateResult result) {
+        return sanitize(result, null);
+    }
+
+    /**
+     * 清洗估价结果（带商品画像：可做「二手价不得高于原价」硬钳制）。
+     *
+     * <p>除 BRAND_NEW（全新未拆封存在溢价空间）外，二手价高于用户填写的原价即不合理
+     * ——无论 LLM 的同款判定如何，一律钳制到原价的 95% 以内并追加风险提示。</p>
+     *
+     * @param result  原始结果（可为 null）
+     * @param profile 归一化入参（可 null，为 null 时不做原价钳制）
+     * @return 清洗后的结果（永不为 null 且关键字段非空）
+     */
+    public static EstimateResult sanitize(EstimateResult result, ItemProfile profile) {
         EstimateResult target = result == null ? new EstimateResult() : result;
 
         BigDecimal suggest = clampMoney(target.getSuggestPrice() == null
@@ -56,6 +70,24 @@ public final class AiResultSanitizer {
             max = tmp;
         }
 
+        // 硬钳制：非全新商品的二手估价不得高于用户填写的原价（LLM 同款判定失误的最后防线）
+        boolean overOriginal = false;
+        if (profile != null && profile.getOriginalPrice() != null
+                && !"BRAND_NEW".equals(profile.getConditionLevel())) {
+            BigDecimal ceiling = profile.getOriginalPrice().multiply(new BigDecimal("0.98"))
+                    .setScale(2, RoundingMode.HALF_UP);
+            if (suggest.compareTo(ceiling) > 0) {
+                suggest = ceiling;
+                overOriginal = true;
+            }
+            if (max.compareTo(ceiling) > 0) {
+                max = ceiling;
+            }
+            if (min.compareTo(ceiling) > 0) {
+                min = ceiling;
+            }
+        }
+
         target.setSuggestPrice(suggest);
         target.setPriceRange(new EstimateResult.PriceRange(min, max));
         target.setConfidence(clampConfidence(target.getConfidence()));
@@ -68,10 +100,16 @@ public final class AiResultSanitizer {
         if (reasons.size() < 2) {
             reasons.add("建议结合同款在售商品价格微调");
         }
+        if (overOriginal) {
+            reasons.add("检测到估价高于原价，已按原价钳制——二手商品通常不应高于全新价");
+        }
         target.setReasons(reasons);
 
         List<String> riskTips = target.getRiskTips() == null ? new ArrayList<>() : target.getRiskTips();
         riskTips.removeIf(tip -> tip == null || tip.isBlank());
+        if (overOriginal) {
+            riskTips.add("成交库匹配到的可能不是同款产品，参考价已按你填写的原价修正，建议核对品牌型号后再试");
+        }
         if (riskTips.isEmpty()) {
             riskTips.add("实际成交价受成色与配件影响，建议面交时再协商");
         }

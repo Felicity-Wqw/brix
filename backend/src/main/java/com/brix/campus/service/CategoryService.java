@@ -1,7 +1,6 @@
 package com.brix.campus.service;
 
 import com.brix.campus.model.Category;
-import com.brix.campus.model.dto.CategorySaveDTO;
 import com.brix.campus.model.vo.CategoryVO;
 
 import java.util.List;
@@ -19,37 +18,6 @@ public interface CategoryService {
     List<CategoryVO> listForFront();
 
     /**
-     * 后台分类列表（含各分类商品数）。
-     *
-     * @return 分类列表
-     */
-    List<CategoryVO> listForAdmin();
-
-    /**
-     * 新增分类。
-     *
-     * @param dto 入参
-     * @return 新建分类
-     */
-    CategoryVO create(CategorySaveDTO dto);
-
-    /**
-     * 编辑分类。
-     *
-     * @param id  分类 ID
-     * @param dto 入参
-     * @return 更新后分类
-     */
-    CategoryVO update(Long id, CategorySaveDTO dto);
-
-    /**
-     * 删除分类（该分类下仍有商品时拒绝）。
-     *
-     * @param id 分类 ID
-     */
-    void delete(Long id);
-
-    /**
      * 取分类实体。
      *
      * @param id 分类 ID
@@ -64,4 +32,14 @@ public interface CategoryService {
      * @return 分类名
      */
     String nameOf(Long id);
+
+    /**
+     * 取带父类的完整分类名（AI 生成简介按分类词条定制用）。
+     *
+     * <p>子类返回「父类-子类」（如「数码电子-手机/平板」），一级分类返回自身名称。</p>
+     *
+     * @param id 分类 ID
+     * @return 完整分类名，不存在返回空串
+     */
+    String displayNameOf(Long id);
 }

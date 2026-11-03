@@ -5,7 +5,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * 商品实体（物理表 {@code t_item}）。
@@ -62,19 +61,11 @@ public class Item extends BaseEntity {
     @TableField("favorite_count")
     private Integer favoriteCount;
 
-    /** 审核拒绝原因 */
-    @TableField("reject_reason")
-    private String rejectReason;
+    /** 品牌型号（可选，≤60 字） */
+    @TableField("brand_model")
+    private String brandModel;
 
     /** 卖家 ID */
     @TableField("seller_id")
     private Long sellerId;
-
-    /** 审核人 */
-    @TableField("audited_by")
-    private Long auditedBy;
-
-    /** 审核时间 */
-    @TableField("audited_at")
-    private LocalDateTime auditedAt;
 }

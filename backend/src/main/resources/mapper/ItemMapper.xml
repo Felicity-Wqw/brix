@@ -2,28 +2,6 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.brix.campus.mapper.ItemMapper">
 
-    <!-- 各分类在售商品数（数据大屏饼图），含 0 的分类由 Java 侧补齐 -->
-    <select id="countOnSaleGroupByCategory" resultType="map">
-        SELECT i.category_id   AS categoryId,
-               c.name          AS name,
-               COUNT(i.id)     AS cnt
-          FROM t_item i
-          JOIN t_category c ON c.id = i.category_id AND c.deleted = 0
-         WHERE i.deleted = 0
-           AND i.status = 'ON_SALE'
-         GROUP BY i.category_id, c.name
-         ORDER BY cnt DESC
-    </select>
-
-    <!-- 各分类商品总数（分类管理列表） -->
-    <select id="countItemGroupByCategory" resultType="map">
-        SELECT i.category_id AS categoryId,
-               COUNT(*)      AS cnt
-          FROM t_item i
-         WHERE i.deleted = 0
-         GROUP BY i.category_id
-    </select>
-
     <!-- 同款在售最低价（AI 工具） -->
     <select id="selectOnSaleLowestPrice" resultType="java.math.BigDecimal">
         SELECT MIN(i.price)
@@ -51,50 +29,16 @@
          ORDER BY o.amount ASC
     </select>
 
-    <!-- 后台商品审核分页：默认待审核，按提交时间升序（先到先审） -->
-    <select id="selectAdminPage" resultType="com.brix.campus.model.vo.AdminItemVO">
-        SELECT i.id             AS id,
-               i.title          AS title,
-               i.cover_image    AS coverImage,
-               i.price          AS price,
-               i.category_id    AS categoryId,
-               c.name           AS categoryName,
-               i.seller_id      AS sellerId,
-               u.nickname       AS sellerNickname,
-               i.campus         AS campus,
-               i.status         AS status,
-               i.reject_reason  AS rejectReason,
-               i.created_at     AS createdAt
-          FROM t_item i
-          LEFT JOIN t_category c ON c.id = i.category_id
-          LEFT JOIN t_user u     ON u.id = i.seller_id
-         WHERE i.deleted = 0
-        <if test="q.status != null and q.status != ''">
-            AND i.status = #{q.status}
+    <select id="selectSoldTitles" resultType="java.lang.String">
+        SELECT DISTINCT o.item_title
+          FROM t_order o
+         WHERE o.deleted = 0
+           AND o.status = 'DONE'
+           AND o.created_at &gt;= DATE_SUB(NOW(), INTERVAL 90 DAY)
+        <if test="keyword != null and keyword != ''">
+            AND o.item_title LIKE CONCAT('%', #{keyword}, '%')
         </if>
-        <if test="q.keyword != null and q.keyword != ''">
-            AND i.title LIKE CONCAT('%', #{q.keyword}, '%')
-        </if>
-         ORDER BY i.created_at ASC, i.id ASC
-    </select>
-
-    <!-- 待审核商品 Top N（数据大屏） -->
-    <select id="selectPendingTop" resultType="com.brix.campus.model.vo.AdminItemVO">
-        SELECT i.id           AS id,
-               i.title        AS title,
-               i.cover_image  AS coverImage,
-               i.price        AS price,
-               i.seller_id    AS sellerId,
-               u.nickname     AS sellerNickname,
-               i.campus       AS campus,
-               i.status       AS status,
-               i.created_at   AS createdAt
-          FROM t_item i
-          LEFT JOIN t_user u ON u.id = i.seller_id
-         WHERE i.deleted = 0
-           AND i.status = 'PENDING'
-         ORDER BY i.created_at ASC, i.id ASC
-         LIMIT #{limit}
+         LIMIT 5
     </select>
 
 </mapper>

@@ -19,6 +19,9 @@ public class ItemProfile implements Serializable {
     /** 分类名（用于规则引擎的品类基准价匹配） */
     private String categoryName;
 
+    /** 完整分类名（带父类前缀，如「数码电子-手机/平板」，供 AI 按分类词条定制文案） */
+    private String categoryFullName;
+
     /** 品牌型号，如「iPad 9 64G」 */
     private String brandModel;
 

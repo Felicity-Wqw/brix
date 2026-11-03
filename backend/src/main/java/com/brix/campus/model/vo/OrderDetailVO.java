@@ -7,7 +7,7 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
- * 订单详情出参：订单快照 + 时间线 + 买卖双方联系方式 + 面交信息 + 确认码。
+ * 订单详情出参：订单快照 + 时间线 + 买卖双方联系方式 + 面交信息。
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -53,10 +53,4 @@ public class OrderDetailVO extends OrderVO implements Serializable {
 
     /** 剩余支付秒数（仅 UNPAID 有值，前端倒计时兜底） */
     private Long payRemainSeconds;
-
-    /** 核销剩余次数 */
-    private Integer remainingAttempts;
-
-    /** 核销是否已锁定 */
-    private Boolean codeLocked;
 }

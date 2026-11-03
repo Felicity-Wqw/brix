@@ -1,10 +1,21 @@
 <template>
   <div class="home">
     <section class="home__hero">
+      <!-- 背景轮播：淡入淡出，5s 一张 -->
+      <div class="home__hero-bg" aria-hidden="true">
+        <div
+          v-for="(image, index) in heroImages"
+          :key="image"
+          class="home__hero-slide"
+          :class="{ 'is-active': index === heroIndex }"
+          :style="{ backgroundImage: `url(${image})` }"
+        />
+        <div class="home__hero-mask"></div>
+      </div>
       <div class="home__hero-inner brix-container">
         <div class="home__hero-text">
           <h1>校园闲置，当面验货再付款</h1>
-          <p>严格限定本校同学之间交易 · 面交确认码保障一手交钱一手交货 · AI 帮你智能定价</p>
+          <p>校内面交先验货后付款 · AI 帮你智能定价</p>
           <div class="home__hero-actions">
             <el-button v-if="auth.role === 'USER'" type="primary" size="large" @click="router.push('/publish')">
               发布闲置
@@ -30,10 +41,21 @@
           </div>
         </div>
       </div>
+      <div class="home__hero-dots">
+        <button
+          v-for="(image, index) in heroImages"
+          :key="'dot-' + index"
+          type="button"
+          class="home__hero-dot"
+          :class="{ 'is-active': index === heroIndex }"
+          :aria-label="`切换到第 ${index + 1} 张`"
+          @click="onDotClick(index)"
+        />
+      </div>
     </section>
 
     <section ref="gridRef" class="home__grid brix-container">
-      <FilterBar v-model="filters" :categories="categories" @change="onFilterChange" />
+      <FilterBar v-model="filters" :categories="allCategories" @change="onFilterChange" />
       <ItemGrid :items="items" :loading="loading" show-reset @reset="resetFilters" />
       <el-pagination
         v-if="total > query.pageSize"
@@ -49,7 +71,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchItems } from '@/api/item'
 import { fetchCategories } from '@/api/category'
@@ -58,11 +80,43 @@ import { DEFAULT_PAGE } from '@/constants'
 import FilterBar from '@/components/FilterBar.vue'
 import ItemGrid from '@/components/ItemGrid.vue'
 
+import heroGate from '@/assets/hero/hero-gate.jpg'
+import heroCampus from '@/assets/hero/hero-campus.jpg'
+import heroLibrary from '@/assets/hero/hero-library.jpg'
+
+/** hero 轮播图（5s 淡入淡出循环） */
+const heroImages = [heroGate, heroCampus, heroLibrary]
+const heroIndex = ref(0)
+const HERO_INTERVAL = 5000
+let heroTimer = null
+
+function startHeroLoop() {
+  stopHeroLoop()
+  heroTimer = setInterval(() => {
+    heroIndex.value = (heroIndex.value + 1) % heroImages.length
+  }, HERO_INTERVAL)
+}
+
+function stopHeroLoop() {
+  if (heroTimer) {
+    clearInterval(heroTimer)
+    heroTimer = null
+  }
+}
+
+/** 手动切换圆点后重新计时，避免刚切就跳 */
+function onDotClick(index) {
+  heroIndex.value = index
+  startHeroLoop()
+}
+
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
 const categories = ref([])
+/** 完整分类列表（一级+二级），供 FilterBar 二级联动 */
+const allCategories = ref([])
 const items = ref([])
 const total = ref(0)
 const inSaleTotal = ref(0)
@@ -168,70 +222,136 @@ watch(
 )
 
 onMounted(async () => {
+  startHeroLoop()
   syncFromRoute()
   load()
   try {
-    categories.value = (await fetchCategories()) || []
+    // 后端 Long 序列化为字符串（"parentId": "0"），必须用 String 比较
+    const list = (await fetchCategories()) || []
+    allCategories.value = list
+    // 首页统计与筛选条主列表只展示一级分类
+    categories.value = list.filter((c) => !c.parentId || String(c.parentId) === '0')
   } catch (error) {
     categories.value = []
+    allCategories.value = []
   }
 })
+
+onUnmounted(stopHeroLoop)
 </script>
 
 <style scoped>
+/* hero：校园实景轮播背景 + 墨绿遮罩，市集海报气质 */
 .home__hero {
-  background: linear-gradient(120deg, #0fa968 0%, #12bd75 60%, #2fd39a 100%);
-  border-radius: 14px;
+  position: relative;
+  border-radius: var(--brix-radius-lg);
   overflow: hidden;
   color: #fff;
+  background: #10281e;
+}
+
+/* 轮播层：绝对定位铺满，淡入淡出 */
+.home__hero-bg {
+  position: absolute;
+  inset: 0;
+}
+
+.home__hero-slide {
+  position: absolute;
+  inset: 0;
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+  transform: scale(1.04);
+  transition: opacity 0.9s cubic-bezier(0.25, 1, 0.5, 1), transform 6s linear;
+}
+
+.home__hero-slide.is-active {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* 遮罩：左侧深保证文案可读，右侧透出照片 */
+.home__hero-mask {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    rgba(13, 34, 26, 0.9) 0%,
+    rgba(13, 34, 26, 0.62) 52%,
+    rgba(13, 34, 26, 0.28) 100%
+  );
 }
 
 .home__hero-inner {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 40px;
-  padding: 48px 40px;
+  padding: 52px 48px;
 }
 
 .home__hero-text h1 {
-  font-size: 32px;
-  line-height: 1.3;
+  font-size: 40px;
+  line-height: 1.25;
+  letter-spacing: 1px;
   margin: 0;
+  font-weight: 700;
+}
+
+/* 价签橙红短横线：全站唯一强调色的克制出现 */
+.home__hero-text h1::before {
+  content: '';
+  display: block;
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--brix-accent);
+  margin-bottom: 18px;
 }
 
 .home__hero-text p {
-  margin-top: 12px;
+  margin-top: 14px;
   font-size: 15px;
-  opacity: 0.92;
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .home__hero-actions {
   display: flex;
   gap: 12px;
-  margin-top: 24px;
+  margin-top: 28px;
 }
 
 .home__hero-actions :deep(.el-button--primary) {
   background: #fff;
   border-color: #fff;
   color: var(--brix-primary);
+  font-weight: 700;
 }
 
 .home__hero-actions :deep(.el-button--primary:hover) {
-  background: #f2fbf7;
-  border-color: #f2fbf7;
+  background: var(--brix-primary-soft);
+  border-color: var(--brix-primary-soft);
 }
 
 .home__hero-actions :deep(.el-button.is-plain) {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.45);
   color: #fff;
 }
 
+.home__hero-actions :deep(.el-button.is-plain:hover) {
+  border-color: rgba(255, 255, 255, 0.8);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* 统计：去卡片盒子，改为行内数字组 + 细竖线分隔 */
 .home__hero-stats {
   display: flex;
-  gap: 28px;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -239,24 +359,54 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: rgba(255, 255, 255, 0.16);
-  border-radius: 12px;
-  padding: 16px 22px;
-  min-width: 96px;
+  padding: 0 28px;
+}
+
+.home__stat + .home__stat {
+  border-left: 0.5px solid rgba(255, 255, 255, 0.22);
 }
 
 .home__stat-value {
-  font-size: 26px;
+  font-size: 32px;
   font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .home__stat-label {
-  margin-top: 2px;
+  margin-top: 6px;
   font-size: 12px;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.68);
+  letter-spacing: 1px;
 }
 
 .home__grid {
-  padding-top: 24px;
+  padding-top: 28px;
+}
+
+/* 轮播指示点：右下角 */
+.home__hero-dots {
+  position: absolute;
+  right: 22px;
+  bottom: 18px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.home__hero-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: width 0.3s cubic-bezier(0.25, 1, 0.5, 1), background 0.2s ease;
+}
+
+.home__hero-dot.is-active {
+  width: 22px;
+  background: #fff;
 }
 </style>

@@ -29,7 +29,6 @@
           @ship="ship"
           @confirm="confirm"
           @review="openReview"
-          @trade-code="openTradeCode"
         />
       </template>
       <EmptyState v-else-if="!loading" text="暂无相关订单" />
@@ -46,15 +45,6 @@
     />
 
     <RateDialog v-model="reviewVisible" :order-id="reviewOrderId" @success="load" />
-    <el-dialog v-model="codeVisible" title="面交确认码" width="420px">
-      <TradeCodeBox
-        v-if="codeVisible"
-        :order-id="codeOrderId"
-        :is-seller="codeIsSeller"
-        order-status="TO_MEET"
-        @verified="onVerified"
-      />
-    </el-dialog>
   </div>
 </template>
 
@@ -66,7 +56,6 @@ import { cancelOrder, confirmOrder, fetchBoughtOrders, fetchSoldOrders, shipOrde
 import { DEFAULT_PAGE, ORDER_STATUS_DICT } from '@/constants'
 import OrderCard from '@/components/OrderCard.vue'
 import RateDialog from '@/components/RateDialog.vue'
-import TradeCodeBox from '@/components/TradeCodeBox.vue'
 import EmptyState from '@/components/EmptyState.vue'
 
 const router = useRouter()
@@ -80,9 +69,6 @@ const query = reactive({ ...DEFAULT_PAGE })
 
 const reviewVisible = ref(false)
 const reviewOrderId = ref('')
-const codeVisible = ref(false)
-const codeOrderId = ref('')
-const codeIsSeller = ref(false)
 
 /** 加载订单（买家 / 卖家两个视角） */
 async function load() {
@@ -149,15 +135,20 @@ async function ship(order) {
   load()
 }
 
-/** 买家确认收货 */
+/** 买家确认收货 / 面交单确认完成 */
 async function confirm(order) {
+  const isMeet = order.tradeType === 'MEET'
   try {
-    await ElMessageBox.confirm('请确认已收到商品且验收无误，确认后交易完成。', '确认收货', { type: 'info' })
+    await ElMessageBox.confirm(
+      isMeet ? '请确认已与卖家线下面交且验货无误，确认后交易完成。' : '请确认已收到商品且验收无误，确认后交易完成。',
+      isMeet ? '确认完成交易' : '确认收货',
+      { type: 'info' }
+    )
   } catch (error) {
     return
   }
   await confirmOrder(order.id)
-  ElMessage.success('确认收货成功，记得评价卖家哦')
+  ElMessage.success(isMeet ? '交易已完成，记得评价卖家哦' : '确认收货成功，记得评价卖家哦')
   load()
 }
 
@@ -165,19 +156,6 @@ async function confirm(order) {
 function openReview(order) {
   reviewOrderId.value = order.id
   reviewVisible.value = true
-}
-
-/** 打开确认码弹窗（买家查看 / 卖家核销） */
-function openTradeCode(order) {
-  codeOrderId.value = order.id
-  codeIsSeller.value = perspective.value === 'sell'
-  codeVisible.value = true
-}
-
-/** 核销成功后刷新列表 */
-function onVerified() {
-  codeVisible.value = false
-  load()
 }
 
 onMounted(load)

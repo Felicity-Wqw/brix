@@ -13,14 +13,12 @@ import com.brix.campus.model.Order;
 import com.brix.campus.model.User;
 import com.brix.campus.model.dto.ChangePasswordDTO;
 import com.brix.campus.model.dto.UpdateProfileDTO;
-import com.brix.campus.model.dto.UserStatusDTO;
 import com.brix.campus.model.enums.ItemStatusEnum;
 import com.brix.campus.model.enums.OrderStatusEnum;
 import com.brix.campus.model.enums.RoleEnum;
 import com.brix.campus.model.enums.UserStatusEnum;
-import com.brix.campus.model.query.UserQuery;
-import com.brix.campus.model.vo.AdminUserVO;
 import com.brix.campus.model.vo.UploadVO;
+import com.brix.campus.model.vo.UserAnalysisVO;
 import com.brix.campus.model.vo.UserStatsVO;
 import com.brix.campus.model.vo.UserVO;
 import com.brix.campus.service.FileStorageService;
@@ -117,59 +115,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     }
 
     @Override
-    public IPage<AdminUserVO> adminPage(UserQuery query) {
-        Page<AdminUserVO> page = new Page<>(
-                query.getCurrentPage() == null ? 1 : query.getCurrentPage(),
-                query.getPageSize() == null ? 10 : query.getPageSize());
-        IPage<AdminUserVO> result = baseMapper.selectAdminPage(page, query);
-        result.getRecords().forEach(vo -> {
-            vo.setRoleDesc(RoleEnum.descOf(vo.getRole()));
-            vo.setStatusDesc(UserStatusEnum.descOf(vo.getStatus()));
-        });
-        return result;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AdminUserVO updateStatus(Long operatorId, Long userId, UserStatusDTO dto) {
-        if (!UserStatusEnum.isValid(dto.getStatus())) {
-            throw BusinessException.param("状态不合法");
-        }
-        User user = getEntity(userId);
-        if (user == null) {
-            throw BusinessException.notFound("用户不存在");
-        }
-        if (UserStatusEnum.DISABLED.getCode().equals(dto.getStatus()) && userId.equals(operatorId)) {
-            throw BusinessException.param("不能禁用当前登录账号");
-        }
-        user.setStatus(dto.getStatus());
-        if (UserStatusEnum.DISABLED.getCode().equals(dto.getStatus())) {
-            user.setDisabledBy(operatorId);
-            user.setDisabledAt(LocalDateTime.now());
-        } else {
-            user.setDisabledBy(null);
-            user.setDisabledAt(null);
-        }
-        updateById(user);
-
-        AdminUserVO vo = new AdminUserVO();
-        vo.setId(user.getId());
-        vo.setUsername(user.getUsername());
-        vo.setNickname(user.getNickname());
-        vo.setAvatar(user.getAvatar());
-        vo.setSchool(user.getSchool());
-        vo.setCampus(user.getCampus());
-        vo.setRole(user.getRole());
-        vo.setRoleDesc(RoleEnum.descOf(user.getRole()));
-        vo.setStatus(user.getStatus());
-        vo.setStatusDesc(UserStatusEnum.descOf(user.getStatus()));
-        vo.setCreditScore(user.getCreditScore());
-        vo.setCreatedAt(user.getCreatedAt());
-        vo.setDisabledAt(user.getDisabledAt());
-        return vo;
-    }
-
-    @Override
     public User getEntity(Long userId) {
         if (userId == null) {
             return null;
@@ -195,6 +140,29 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         vo.setCreditScore(user.getCreditScore());
         vo.setCreatedAt(user.getCreatedAt());
         return vo;
+    }
+
+    @Override
+    public UserAnalysisVO getMyAnalysis(Long userId) {
+        UserAnalysisVO vo = new UserAnalysisVO();
+        vo.setBuy(buildAnalysisSide(userId, "BUYER"));
+        vo.setSell(buildAnalysisSide(userId, "SELLER"));
+        return vo;
+    }
+
+    /**
+     * 组装买入/卖出单一维度的分析数据。
+     *
+     * @param userId 用户 ID
+     * @param role   BUYER / SELLER
+     * @return 维度统计
+     */
+    private UserAnalysisVO.Side buildAnalysisSide(Long userId, String role) {
+        UserAnalysisVO.Side side = new UserAnalysisVO.Side();
+        side.setSummary(orderMapper.selectDoneOrderSummary(userId, role));
+        side.setCategories(orderMapper.selectDoneOrderCategoryStats(userId, role));
+        side.setMonthly(orderMapper.selectDoneOrderMonthlyStats(userId, role));
+        return side;
     }
 
     /**

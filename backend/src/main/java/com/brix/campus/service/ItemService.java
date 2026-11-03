@@ -4,21 +4,19 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.model.Item;
 import com.brix.campus.model.dto.ItemSaveDTO;
 import com.brix.campus.model.dto.ItemStatusDTO;
-import com.brix.campus.model.query.ItemAuditQuery;
 import com.brix.campus.model.query.ItemQuery;
-import com.brix.campus.model.vo.AdminItemVO;
 import com.brix.campus.model.vo.ItemDetailVO;
 import com.brix.campus.model.vo.ItemVO;
 
 import java.util.List;
 
 /**
- * 商品服务（B01-B09 + 后台审核 K07-K10）。
+ * 商品服务（B01-B09，发布即上架）。
  */
 public interface ItemService {
 
     /**
-     * 发布商品：状态为 {@code PENDING}，前台列表不可见。
+     * 发布商品：直接 {@code ON_SALE} 上架。
      *
      * @param sellerId 卖家 ID（取自 token）
      * @param dto      入参
@@ -54,7 +52,7 @@ public interface ItemService {
     IPage<ItemVO> pageMine(Long sellerId, ItemQuery query);
 
     /**
-     * 编辑商品：仅本人，编辑后状态回到 {@code PENDING}；{@code SOLD} 不可编辑。
+     * 编辑商品：仅本人，编辑后保持 {@code ON_SALE}；{@code SOLD} 不可编辑。
      *
      * @param sellerId 卖家 ID
      * @param itemId   商品 ID
@@ -81,41 +79,6 @@ public interface ItemService {
     ItemVO updateStatus(Long sellerId, Long itemId, ItemStatusDTO dto);
 
     /**
-     * 后台审核分页（默认待审核，按提交时间升序）。
-     *
-     * @param query 查询条件
-     * @return 分页结果
-     */
-    IPage<AdminItemVO> adminPage(ItemAuditQuery query);
-
-    /**
-     * 批量审核通过。
-     *
-     * @param reviewerId 审核员 ID
-     * @param ids        商品 ID 列表
-     * @return 通过条数
-     */
-    int auditPass(Long reviewerId, List<Long> ids);
-
-    /**
-     * 审核拒绝（原因必填）。
-     *
-     * @param reviewerId 审核员 ID
-     * @param itemId     商品 ID
-     * @param reason     拒绝原因
-     */
-    void auditReject(Long reviewerId, Long itemId, String reason);
-
-    /**
-     * 强制下架（不受商品归属限制）。
-     *
-     * @param reviewerId 审核员 ID
-     * @param itemId     商品 ID
-     * @param reason     下架原因
-     */
-    void forceOffline(Long reviewerId, Long itemId, String reason);
-
-    /**
      * 取商品实体，不存在返回 null。
      *
      * @param itemId 商品 ID
@@ -130,4 +93,13 @@ public interface ItemService {
      * @return VO
      */
     ItemVO toVO(Item item);
+
+    /**
+     * 同类推荐：同子类优先（按浏览量倒序），不足时用同父类其他子类补足。
+     *
+     * @param itemId 当前商品 ID（排除自身）
+     * @param limit  返回上限
+     * @return 推荐商品列表（仅 ON_SALE）
+     */
+    List<ItemVO> listSimilar(Long itemId, int limit);
 }

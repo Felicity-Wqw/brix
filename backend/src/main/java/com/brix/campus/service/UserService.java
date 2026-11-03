@@ -4,15 +4,13 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.model.User;
 import com.brix.campus.model.dto.ChangePasswordDTO;
 import com.brix.campus.model.dto.UpdateProfileDTO;
-import com.brix.campus.model.dto.UserStatusDTO;
-import com.brix.campus.model.query.UserQuery;
-import com.brix.campus.model.vo.AdminUserVO;
 import com.brix.campus.model.vo.UploadVO;
+import com.brix.campus.model.vo.UserAnalysisVO;
 import com.brix.campus.model.vo.UserVO;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 用户服务：个人资料、密码、头像，以及后台用户管理。
+ * 用户服务：个人资料、密码、头像。
  */
 public interface UserService {
 
@@ -61,22 +59,12 @@ public interface UserService {
     UploadVO updateAvatar(Long userId, MultipartFile file);
 
     /**
-     * 后台用户分页。
+     * 个人买卖可视化分析（G05）：买入/卖出两维度的汇总、分类占比与月度趋势。
      *
-     * @param query 查询条件
-     * @return 分页结果
+     * @param userId 用户 ID（取自 token）
+     * @return 分析数据
      */
-    IPage<AdminUserVO> adminPage(UserQuery query);
-
-    /**
-     * 后台禁用 / 启用用户。
-     *
-     * @param operatorId 操作人 ID
-     * @param userId     目标用户 ID
-     * @param dto        入参
-     * @return 更新后的用户
-     */
-    AdminUserVO updateStatus(Long operatorId, Long userId, UserStatusDTO dto);
+    UserAnalysisVO getMyAnalysis(Long userId);
 
     /**
      * 取用户实体，不存在返回 null。

@@ -68,8 +68,8 @@ public class ItemVO implements Serializable {
     /** 卖家昵称 */
     private String sellerNickname;
 
-    /** 审核拒绝原因（仅「我的商品」返回） */
-    private String rejectReason;
+    /** 品牌型号（可选） */
+    private String brandModel;
 
     /** 发布时间 */
     private LocalDateTime createdAt;

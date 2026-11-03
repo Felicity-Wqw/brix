@@ -6,7 +6,8 @@ import lombok.Data;
 import java.io.Serializable;
 
 /**
- * 收银台支付入参（E02）：{@code payMethod} 取 WECHAT / ALIPAY / BANK。
+ * 收银台支付入参（E02）：{@code payMethod} 取 WECHAT / ALIPAY
+ * （收银台仅提供微信/支付宝两个支付沙箱；BANK 仅存量的种子数据兼容，入口已下线）。
  */
 @Data
 public class PayDTO implements Serializable {

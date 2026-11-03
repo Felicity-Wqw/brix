@@ -59,9 +59,6 @@ public class OrderVO implements Serializable {
     /** 下单时间 */
     private LocalDateTime createdAt;
 
-    /** 面交确认码（仅面交单、仅买卖双方可见） */
-    private String tradeCode;
-
     /** 买家 ID */
     private Long buyerId;
 
@@ -77,8 +74,23 @@ public class OrderVO implements Serializable {
     /** 面交地点 */
     private String meetPlace;
 
-    /** 核销失败次数 */
-    private Integer codeFailCount;
+    /** 面交时间 */
+    private LocalDateTime meetTime;
+
+    /** 收货人姓名（邮寄单） */
+    private String receiverName;
+
+    /** 收货人手机号（邮寄单） */
+    private String receiverPhone;
+
+    /** 收货地址（邮寄单） */
+    private String receiverAddress;
+
+    /** 托管状态文案：托管中 / 已结算给卖家（未支付为 null） */
+    private String escrowDesc;
+
+    /** 预付款结算给卖家的时间 */
+    private LocalDateTime settleTime;
 
     /** 当前用户在该订单中的身份：BUYER / SELLER / ADMIN */
     private String viewerRole;

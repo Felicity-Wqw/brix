@@ -17,14 +17,15 @@ if "%SERVER_PORT%"=="" set "SERVER_PORT=8080"
 
 set "MAVEN_CMD=mvn"
 where mvn >nul 2>nul || (
-  for /d %%d in ("%USERPROFILE%\.m2\wrapper\dists\apache-maven-3.10.0\*") do set "MAVEN_CMD=%%d\bin\mvn.cmd"
+  rem 兼容 wrapper 任意版本：递归搜索 dists 下所有 mvn.cmd，取最后一个
+  for /f "delims=" %%f in ('dir /b /s "%USERPROFILE%\.m2\wrapper\dists\mvn.cmd" 2^>nul') do set "MAVEN_CMD=%%f"
 )
 
 echo 使用 Maven: %MAVEN_CMD%
 echo 后端端口: %SERVER_PORT%  数据库账号: %DB_USERNAME%/%DB_PASSWORD%
 echo.
 
-call %MAVEN_CMD% -q spring-boot:run
+call "%MAVEN_CMD%" -q spring-boot:run
 
 echo.
 echo 后端已退出。

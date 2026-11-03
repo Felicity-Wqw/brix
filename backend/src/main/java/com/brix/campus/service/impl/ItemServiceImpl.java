@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.brix.campus.common.BusinessException;
+import com.brix.campus.service.BrowseHistoryService;
 import com.brix.campus.mapper.CategoryMapper;
 import com.brix.campus.mapper.FavoriteMapper;
 import com.brix.campus.mapper.ItemImageMapper;
@@ -26,15 +27,13 @@ import com.brix.campus.model.enums.ItemStatusEnum;
 import com.brix.campus.model.enums.OrderStatusEnum;
 import com.brix.campus.model.enums.TradeTypeEnum;
 import com.brix.campus.model.query.BaseQuery;
-import com.brix.campus.model.query.ItemAuditQuery;
 import com.brix.campus.model.query.ItemQuery;
-import com.brix.campus.model.vo.AdminItemVO;
 import com.brix.campus.model.vo.ItemDetailVO;
 import com.brix.campus.model.vo.ItemImageVO;
 import com.brix.campus.model.vo.ItemVO;
 import com.brix.campus.model.vo.SellerVO;
 import com.brix.campus.service.ItemService;
-import com.brix.campus.util.ViewCountDedupCache;
+import com.brix.campus.service.PublishAuditService;import com.brix.campus.util.ViewCountDedupCache;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,8 +50,8 @@ import java.util.stream.Collectors;
 /**
  * 商品服务实现。
  *
- * <p>状态机约束（PRD B08）：{@code ON_SALE → OFF_SHELF}（主动/强制下架）、
- * {@code OFF_SHELF → PENDING}（重新上架需再审）、编辑一律回 {@code PENDING}、{@code SOLD} 不可编辑/上下架。</p>
+ * <p>状态机约束：{@code ON_SALE → OFF_SHELF}（主动下架）、
+ * {@code OFF_SHELF → ON_SALE}（重新上架）、编辑保持上架、{@code SOLD} 不可编辑/上下架。</p>
  */
 @Service
 public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements ItemService {
@@ -72,25 +71,33 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
     private final FavoriteMapper favoriteMapper;
     private final OrderMapper orderMapper;
     private final ViewCountDedupCache viewCountDedupCache;
+    private final PublishAuditService publishAuditService;
+    private final BrowseHistoryService browseHistoryService;
 
     public ItemServiceImpl(ItemImageMapper itemImageMapper,
                            CategoryMapper categoryMapper,
                            UserMapper userMapper,
                            FavoriteMapper favoriteMapper,
                            OrderMapper orderMapper,
-                           ViewCountDedupCache viewCountDedupCache) {
+                           ViewCountDedupCache viewCountDedupCache,
+                           PublishAuditService publishAuditService,
+                           BrowseHistoryService browseHistoryService) {
         this.itemImageMapper = itemImageMapper;
         this.categoryMapper = categoryMapper;
         this.userMapper = userMapper;
         this.favoriteMapper = favoriteMapper;
         this.orderMapper = orderMapper;
         this.viewCountDedupCache = viewCountDedupCache;
+        this.publishAuditService = publishAuditService;
+        this.browseHistoryService = browseHistoryService;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ItemVO create(Long sellerId, ItemSaveDTO dto) {
         validateSaveDTO(dto);
+        // 发布合规两道闸：违禁词黑名单 + AI 审核员复审（不合规直接抛异常，商品不落库）
+        publishAuditService.check(dto.getTitle(), dto.getDescription(), categoryNameOf(dto.getCategoryId()));
 
         Item item = new Item();
         item.setTitle(dto.getTitle().trim());
@@ -102,7 +109,8 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         item.setCampus(dto.getCampus().trim());
         item.setTradeType(dto.getTradeType());
         item.setContact(dto.getContact() == null ? null : dto.getContact().trim());
-        item.setStatus(ItemStatusEnum.PENDING.getCode());
+        item.setBrandModel(dto.getBrandModel() == null ? null : dto.getBrandModel().trim());
+        item.setStatus(ItemStatusEnum.ON_SALE.getCode());
         item.setCoverImage("");
         item.setViewCount(0);
         item.setFavoriteCount(0);
@@ -149,6 +157,11 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             item.setViewCount(item.getViewCount() == null ? 1 : item.getViewCount() + 1);
         }
 
+        // 登录用户记录浏览历史（同一商品仅保留一条，重复浏览刷新时间；失败不影响主流程）
+        if (viewerId != null) {
+            browseHistoryService.record(viewerId, itemId);
+        }
+
         ItemDetailVO vo = new ItemDetailVO();
         copyBase(item, vo);
         vo.setDescription(item.getDescription());
@@ -168,7 +181,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         }
         Category category = categoryMapper.selectById(item.getCategoryId());
         if (category != null) {
-            vo.setCategoryName(category.getName());
+            vo.setCategoryName(displayCategoryName(category, null));
         }
         vo.setIsOwner(owner);
         if (viewerId != null) {
@@ -204,6 +217,8 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             throw BusinessException.param("已售出商品不可编辑");
         }
         validateSaveDTO(dto);
+        // 编辑同样过合规闸（防止改内容夹带违规信息）
+        publishAuditService.check(dto.getTitle(), dto.getDescription(), categoryNameOf(dto.getCategoryId()));
 
         item.setTitle(dto.getTitle().trim());
         item.setDescription(dto.getDescription().trim());
@@ -214,11 +229,9 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         item.setCampus(dto.getCampus().trim());
         item.setTradeType(dto.getTradeType());
         item.setContact(dto.getContact() == null ? null : dto.getContact().trim());
-        // 编辑后一律重新进入待审核
-        item.setStatus(ItemStatusEnum.PENDING.getCode());
-        item.setRejectReason(null);
-        item.setAuditedBy(null);
-        item.setAuditedAt(null);
+        item.setBrandModel(dto.getBrandModel() == null ? null : dto.getBrandModel().trim());
+        // 编辑后保持上架状态
+        item.setStatus(ItemStatusEnum.ON_SALE.getCode());
 
         List<String> images = dto.getImages() == null ? Collections.emptyList() : dto.getImages();
         item.setCoverImage(images.isEmpty() ? "" : images.get(0));
@@ -252,11 +265,8 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             if (!ItemStatusEnum.OFF_SHELF.getCode().equals(item.getStatus())) {
                 throw BusinessException.param("当前商品状态不支持该操作");
             }
-            // 重新上架需重新审核
-            item.setStatus(ItemStatusEnum.PENDING.getCode());
-            item.setRejectReason(null);
-            item.setAuditedBy(null);
-            item.setAuditedAt(null);
+            // 重新上架
+            item.setStatus(ItemStatusEnum.ON_SALE.getCode());
         } else if (ItemStatusEnum.OFF_SHELF.getCode().equals(action)) {
             if (!ItemStatusEnum.ON_SALE.getCode().equals(item.getStatus())) {
                 throw BusinessException.param("当前商品状态不支持该操作");
@@ -270,82 +280,74 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
     }
 
     @Override
-    public IPage<AdminItemVO> adminPage(ItemAuditQuery query) {
-        Page<AdminItemVO> page = new Page<>(pageOf(query), sizeOf(query));
-        IPage<AdminItemVO> result = baseMapper.selectAdminPage(page, query);
-        result.getRecords().forEach(vo -> vo.setStatusDesc(ItemStatusEnum.descOf(vo.getStatus())));
-        return result;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public int auditPass(Long reviewerId, List<Long> ids) {
-        if (ids == null || ids.isEmpty()) {
-            throw BusinessException.param("请选择要审核的商品");
-        }
-        LocalDateTime now = LocalDateTime.now();
-        int passed = 0;
-        for (Long id : ids) {
-            Item item = getEntity(id);
-            if (item == null || !ItemStatusEnum.PENDING.getCode().equals(item.getStatus())) {
-                continue;
-            }
-            item.setStatus(ItemStatusEnum.ON_SALE.getCode());
-            item.setRejectReason(null);
-            item.setAuditedBy(reviewerId);
-            item.setAuditedAt(now);
-            updateById(item);
-            passed++;
-        }
-        return passed;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void auditReject(Long reviewerId, Long itemId, String reason) {
-        if (reason == null || reason.trim().isEmpty()) {
-            throw BusinessException.param("拒绝原因不能为空");
-        }
-        Item item = getEntity(itemId);
-        if (item == null) {
-            throw BusinessException.notFound("商品不存在");
-        }
-        if (!ItemStatusEnum.PENDING.getCode().equals(item.getStatus())) {
-            throw BusinessException.param("当前商品状态不支持该操作");
-        }
-        item.setStatus(ItemStatusEnum.REJECTED.getCode());
-        item.setRejectReason(reason.trim());
-        item.setAuditedBy(reviewerId);
-        item.setAuditedAt(LocalDateTime.now());
-        updateById(item);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public void forceOffline(Long reviewerId, Long itemId, String reason) {
-        Item item = getEntity(itemId);
-        if (item == null) {
-            throw BusinessException.notFound("商品不存在");
-        }
-        if (!ItemStatusEnum.ON_SALE.getCode().equals(item.getStatus())) {
-            throw BusinessException.param("当前商品状态不支持该操作");
-        }
-        item.setStatus(ItemStatusEnum.OFF_SHELF.getCode());
-        if (reason != null && !reason.trim().isEmpty()) {
-            String trimmed = reason.trim();
-            item.setRejectReason(trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed);
-        }
-        item.setAuditedBy(reviewerId);
-        item.setAuditedAt(LocalDateTime.now());
-        updateById(item);
-    }
-
-    @Override
     public Item getEntity(Long itemId) {
         if (itemId == null) {
             return null;
         }
         return getById(itemId);
+    }
+
+    @Override
+    public List<ItemVO> listSimilar(Long itemId, int limit) {
+        Item item = getEntity(itemId);
+        if (item == null) {
+            return Collections.emptyList();
+        }
+        Category category = categoryMapper.selectById(item.getCategoryId());
+        Long parentId = category == null ? null : category.getParentId();
+
+        // 1) 同子类优先（按浏览量倒序）
+        List<Item> picked = new ArrayList<>(baseMapper.selectList(Wrappers.<Item>lambdaQuery()
+                .eq(Item::getStatus, ItemStatusEnum.ON_SALE.getCode())
+                .eq(Item::getCategoryId, item.getCategoryId())
+                .ne(Item::getId, itemId)
+                .orderByDesc(Item::getViewCount)
+                .orderByDesc(Item::getId)
+                .last("LIMIT " + limit)));
+
+        // 2) 不足 limit 件时，用同父类其他子类（含父类直属商品）补足
+        if (picked.size() < limit && parentId != null) {
+            Set<Long> excludeIds = picked.stream().map(Item::getId).collect(Collectors.toSet());
+            excludeIds.add(itemId);
+            List<Long> categoryIds = new ArrayList<>();
+            if (parentId != 0L) {
+                // 当前是子类 → 补充父类下所有子类 + 父类直属 + 父类自身
+                categoryIds = categoryMapper.selectList(Wrappers.<Category>lambdaQuery()
+                                .eq(Category::getParentId, parentId))
+                        .stream().map(Category::getId).collect(Collectors.toList());
+                categoryIds.add(parentId);
+            } else {
+                // 当前是一级分类 → 补充其子类
+                categoryIds = categoryMapper.selectList(Wrappers.<Category>lambdaQuery()
+                                .eq(Category::getParentId, item.getCategoryId()))
+                        .stream().map(Category::getId).collect(Collectors.toList());
+            }
+            categoryIds.add(item.getCategoryId());
+            List<Item> fill = baseMapper.selectList(Wrappers.<Item>lambdaQuery()
+                    .eq(Item::getStatus, ItemStatusEnum.ON_SALE.getCode())
+                    .in(Item::getCategoryId, categoryIds)
+                    .notIn(Item::getId, excludeIds)
+                    .orderByDesc(Item::getViewCount)
+                    .orderByDesc(Item::getId)
+                    .last("LIMIT " + (limit - picked.size())));
+            picked.addAll(fill);
+        }
+
+        return convertList(picked);
+    }
+
+    /**
+     * 实体列表转 VO 列表。
+     *
+     * @param items 实体列表
+     * @return VO 列表
+     */
+    private List<ItemVO> convertList(List<Item> items) {
+        List<ItemVO> vos = new ArrayList<>(items.size());
+        for (Item entity : items) {
+            vos.add(toVO(entity));
+        }
+        return vos;
     }
 
     @Override
@@ -357,7 +359,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         copyBase(item, vo);
         Category category = categoryMapper.selectById(item.getCategoryId());
         if (category != null) {
-            vo.setCategoryName(category.getName());
+            vo.setCategoryName(displayCategoryName(category, null));
         }
         User seller = userMapper.selectById(item.getSellerId());
         if (seller != null) {
@@ -384,6 +386,17 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             throw BusinessException.forbidden("无权操作该商品");
         }
         return item;
+    }
+
+    /**
+     * 查分类名称（合规审核提示词用，查不到给占位文案）。
+     *
+     * @param categoryId 分类 ID
+     * @return 分类名称
+     */
+    private String categoryNameOf(Long categoryId) {
+        Category category = categoryMapper.selectById(categoryId);
+        return category == null ? "未知分类" : category.getName();
     }
 
     /**
@@ -426,7 +439,15 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             wrapper.and(w -> w.like(Item::getTitle, keyword).or().like(Item::getDescription, keyword));
         }
         if (query.getCategoryId() != null) {
-            wrapper.eq(Item::getCategoryId, query.getCategoryId());
+            // 级联分类：选一级分类时需包含其全部子类下的商品
+            List<Long> categoryIds = new ArrayList<>();
+            categoryIds.add(query.getCategoryId());
+            List<Category> children = categoryMapper.selectList(Wrappers.<Category>lambdaQuery()
+                    .eq(Category::getParentId, query.getCategoryId()));
+            for (Category child : children) {
+                categoryIds.add(child.getId());
+            }
+            wrapper.in(Item::getCategoryId, categoryIds);
         }
         if (query.getCampus() != null && !query.getCampus().isBlank()) {
             wrapper.eq(Item::getCampus, query.getCampus().trim());
@@ -473,8 +494,18 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
             Set<Long> sellerIds = records.stream()
                     .map(Item::getSellerId).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
             if (!categoryIds.isEmpty()) {
-                for (Category category : categoryMapper.selectByIds(categoryIds)) {
-                    categoryNames.put(category.getId(), category.getName());
+                List<Category> categories = categoryMapper.selectByIds(categoryIds);
+                // 子类的展示名带父类前缀（如「数码电子 / 手机/平板」），先批量取父类
+                Set<Long> parentIds = categories.stream()
+                        .map(Category::getParentId).filter(pid -> pid != null && pid > 0).collect(Collectors.toSet());
+                Map<Long, String> parentNames = new HashMap<>();
+                if (!parentIds.isEmpty()) {
+                    for (Category parent : categoryMapper.selectByIds(parentIds)) {
+                        parentNames.put(parent.getId(), parent.getName());
+                    }
+                }
+                for (Category category : categories) {
+                    categoryNames.put(category.getId(), displayCategoryName(category, parentNames));
                 }
             }
             if (!sellerIds.isEmpty()) {
@@ -503,6 +534,27 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
      * @param item 实体
      * @param vo   目标 VO
      */
+    /**
+     * 子类展示名带父类前缀：parentNames 为 null 时按需单查（详情页用）。
+     *
+     * @param category     分类
+     * @param parentNames  父类名缓存（可 null）
+     * @return 如「数码电子 / 手机/平板」；一级分类返回自身名称
+     */
+    private String displayCategoryName(Category category, Map<Long, String> parentNames) {
+        if (category.getParentId() == null || category.getParentId() == 0L) {
+            return category.getName();
+        }
+        String parentName = null;
+        if (parentNames != null) {
+            parentName = parentNames.get(category.getParentId());
+        } else {
+            Category parent = categoryMapper.selectById(category.getParentId());
+            parentName = parent == null ? null : parent.getName();
+        }
+        return parentName == null ? category.getName() : parentName + " / " + category.getName();
+    }
+
     private void copyBase(Item item, ItemVO vo) {
         vo.setId(item.getId());
         vo.setTitle(item.getTitle());
@@ -520,7 +572,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         vo.setFavoriteCount(item.getFavoriteCount());
         vo.setCategoryId(item.getCategoryId());
         vo.setSellerId(item.getSellerId());
-        vo.setRejectReason(item.getRejectReason());
+        vo.setBrandModel(item.getBrandModel());
         vo.setCreatedAt(item.getCreatedAt());
     }
 

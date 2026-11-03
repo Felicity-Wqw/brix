@@ -1,4 +1,6 @@
-# Brix Campus Market 校园二手交易平台
+# 物归校园（Brix Campus Market）
+
+> 「物归原主」的「物归」——每件闲置，都在校园里找到它的新主人。
 
 Spring Boot 3 + Vue3 的校园二手交易平台（本地开发态双进程：后端 8080 + 前端 5173）。
 
@@ -15,43 +17,49 @@ Spring Boot 3 + Vue3 的校园二手交易平台（本地开发态双进程：�
 
 ```
 brix-campus-market/
-├── backend/               # SpringBoot 3.5.3 + MyBatis-Plus 3.5.17（183 个 Java 源文件）
+├── backend/               # SpringBoot 3.5.3 + MyBatis-Plus 3.5.17
 │   └── src/main/java/com/brix/campus/
 │       ├── common/        # R / ResultCode / BusinessException / 全局异常
 │       ├── config/        # MyBatis-Plus / Security / WebSocket / Jackson
-│       ├── controller/    # 用户端 + admin 后台
+│       ├── controller/    # 用户端接口
 │       ├── service/       # 业务层（接口 + impl）
 │       ├── model/         # entity / query / dto / vo / enums
-│       ├── ai/            # LangChain4j 估价智能体 + 规则引擎降级
+│       ├── ai/            # LangChain4j：估价 / 文案 / 发布审核 三个智能体 + 规则降级
 │       ├── ws/            # 私信 WebSocket
 │       └── job/           # 待付款超时关单
-├── frontend/              # Vue3 + TypeScript + Vite + Element Plus
+├── frontend/              # Vue3 + TypeScript + Vite + Element Plus + ECharts
 │   └── src/{api,components,layout,router,stores,styles,utils,views}
-├── db/                    # schema.sql / data.sql / init-db.bat
-├── docs/                  # PRD.md（69 条需求）、ARCHITECTURE.md（11 表 DDL + 57 接口）
-├── start-backend.bat
+├── db/                    # schema.sql / data.sql / seed-transactions.sql / init-db.bat
+├── docs/                  # STARTUP.md（启动指南）、PRD.md、ARCHITECTURE.md（文首有「变更说明」，以代码为准）
+├── start-backend.bat      # 读取根目录 .env.bat 环境变量后启动后端
 └── start-frontend.bat
 ```
 
 ## 功能一览
 
-**用户端**：注册登录、首页筛选搜索、商品详情、发布商品（AI 估价 + 一键文案）、下单与收银台、订单流转（发货 / 收货 / 取消）、面交确认码、评价、收藏、私信（WebSocket 实时）、举报、个人中心。
+**用户端**：注册登录、首页两级分类筛选搜索、商品详情（同类好物推荐）、发布商品（级联分类 + 品牌快捷标签 + AI 估价 + 分类驱动文案，**合规两道闸通过后直接上架**）、下单与收银台、订单流转（发货 / 收货 / 面交确认完成）、评价、收藏、浏览历史、私信（WebSocket 实时）、举报、个人中心（含买卖可视化分析）。
 
-**管理端**：数据大屏（ECharts 趋势与分布）、商品审核（单条 / 批量 / 拒绝原因）、举报处理、用户管理、订单管理（含锁定单重置与强制取消）、分类管理、私信取证。
+**发布合规两道闸**：① 违禁词黑名单（内置词表，命中即拒）；② AI 审核员（四选一判定：通过 / 驳回禁止上架 / 驳回修改后重审 / 上报风控，附法规依据）。AI 故障时**降级放行**——AI 只能拒绝，不能阻断发布；审核调用不消耗用户每日 AI 额度。
 
-**技术要点**：统一响应体 `R{code,msg,data,timestamp}`、业务失败 HTTP 仍 200、分页用 MyBatis-Plus `IPage`、`Long` 序列化为字符串防精度丢失、防超卖用条件更新影响行数、面交码失败 5 次锁定且计数持久化。
+**技术要点**：统一响应体 `R{code,msg,data,timestamp}`、业务失败 HTTP 仍 200、分页用 MyBatis-Plus `IPage`、`Long` 序列化为字符串防精度丢失、防超卖用条件更新影响行数、AI 能力全部经 `ObjectProvider` 可选装配（无 Key 自动降级，不崩）。
+
+## 本地启动
+
+> 📖 **完整启动指南见 [docs/STARTUP.md](docs/STARTUP.md)**——含数据库初始化细节、
+> 环境变量说明、AI Key 配置、演示账号、常见问题 FAQ。Windows 下三步：`db\init-db.bat`
+> → `start-backend.bat` → `start-frontend.bat`，然后访问 http://localhost:5173 。
 
 ## 1. 初始化数据库（双击 `db/init-db.bat`）
 
-输入 MySQL root 密码即可，脚本会自动完成：建库 `brix_campus` → 建应用账号 `brix/brix123` 并授权 → 导入表结构 → 导入种子数据 → 打印行数校验（应显示 users=8、items=36、orders=7）。
+输入 MySQL 密码即可，脚本会自动完成：建库 `brix_campus` → 建应用账号 `brix` 并授权 → 导入表结构 → 导入种子数据。行数校验参考：users=2、categories=33（6 一级 + 27 二级）、items=101（36 在架 + 65 成交快照）、orders 含近 90 天成交记录。
 
 ## 2. 启动后端（双击 `start-backend.bat`）
 
-自动寻找本机 Maven（`%USERPROFILE%\.m2\wrapper\dists\apache-maven-3.10.0\*\bin\mvn.cmd`），执行 `mvn spring-boot:run`。
+脚本先加载根目录 `.env.bat`（可存放 `DB_USERNAME` / `DB_PASSWORD` / `AI_API_KEY` 等覆盖项），再自动寻找本机 Maven 执行 `mvn spring-boot:run`。
 看到 `Tomcat started on port 8080` 即成功；首次请求稍慢（建 Druid 连接池）。
 
-- 数据库账号/密码通过环境变量 `DB_USERNAME` / `DB_PASSWORD` 覆盖，缺省 `brix / brix123`（源码中不硬编码）。
-- `AI_API_KEY` 留空即走「本地规则估价」，不会报错；填入 Key 则走 LLM。
+- 数据库账号/密码通过环境变量 `DB_USERNAME` / `DB_PASSWORD` 覆盖，缺省 `brix`（源码中不硬编码密码）。
+- **AI 能力完全可选**：`AI_API_KEY` 留空时——估价走本地规则引擎、文案与审核闸自动降级（审核仅剩词表闸），系统正常启动，不会报错；填入 DeepSeek Key 则全功能可用。
 
 ## 3. 启动前端（双击 `start-frontend.bat`）
 
@@ -61,15 +69,7 @@ brix-campus-market/
 
 | 用途 | 用户名 | 密码 |
 | --- | --- | --- |
-| 普通用户（演示主号，含订单/收藏/私信数据） | `student01` | `user123456` |
-| 卖家（阿哲的数码铺） | `seller01` | `user123456` |
-| 卖家（悦悦二手书） | `seller02` | `user123456` |
-| 卖家（老李杂货） | `seller03` | `user123456` |
-| 卖家（阿May） | `seller04` | `user123456` |
-| 卖家（篮球少年） | `seller05` | `user123456` |
-| 审核员（商品审核 / 举报处理） | `reviewer01` | `reviewer123456` |
-| 运营（数据大屏 / 用户 / 订单 / 分类管理） | `operator01` | `operator123456` |
+| 买家视角主号「小林同学」（约 58 买 / 10 卖，含浏览/收藏/私信数据） | `student01` | ``464585` |
+| 卖家视角主号「阿哲的数码铺」（约 58 卖 / 10 买，在架商品最多） | `seller01` | ``464585` |
 
-后台入口：`http://localhost:5173/#/admin/login`（普通用户登录会被拒绝）。
-
-> 演示数据里预置了一笔**待面交订单**（确认码 `042317`，用 student01 购买、seller05 核销）和一笔**待付款订单**（可体验收银台倒计时）。
+> 演示数据预置了待面交订单（买家线下见面后「确认完成交易」）、待付款订单（可体验收银台倒计时）以及 90 天成交记录（个人分析页与 AI 估价的数据底座）。

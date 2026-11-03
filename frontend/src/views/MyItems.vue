@@ -43,18 +43,6 @@
           </div>
 
           <div class="my-item__actions">
-            <el-popover
-              v-if="item.status === 'REJECTED' && item.rejectReason"
-              placement="top"
-              :width="260"
-              trigger="hover"
-            >
-              <template #reference>
-                <el-button text type="danger">拒绝原因</el-button>
-              </template>
-              <p class="my-item__reason">{{ item.rejectReason }}</p>
-            </el-popover>
-
             <el-button
               v-if="item.status === 'ON_SALE'"
               size="small"
@@ -63,7 +51,7 @@
               下架
             </el-button>
             <el-button
-              v-else-if="item.status === 'OFF_SHELF' || item.status === 'REJECTED'"
+              v-else-if="item.status === 'OFF_SHELF'"
               size="small"
               type="primary"
               plain

@@ -1,8 +1,11 @@
 <template>
   <div class="auth-page">
-    <div class="auth-card brix-card">
+    <div class="auth-card">
       <div class="auth-card__head">
-        <span class="auth-card__mark">B</span>
+        <div class="auth-card__brand">
+          <span class="auth-card__mark">归</span>
+          <span class="auth-card__brand-name">物归校园</span>
+        </div>
         <h1 class="auth-card__title">注册账号</h1>
         <p class="auth-card__sub">注册即视为同意「校内面交优先」的交易规则</p>
       </div>
@@ -106,52 +109,91 @@ async function submit() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(160deg, #0fa968 0%, #0b7f50 55%, #0a5c3c 100%);
-  padding: 40px 0;
+  padding: 40px 16px;
+  background:
+    radial-gradient(900px 500px at 82% 18%, rgba(148, 210, 189, 0.55) 0%, transparent 60%),
+    radial-gradient(760px 520px at 12% 85%, rgba(15, 169, 104, 0.5) 0%, transparent 62%),
+    linear-gradient(160deg, #e9f6ef 0%, #cdeadb 40%, #9fd4bb 78%, #7fbfa3 100%);
 }
 
 .auth-card {
-  width: 400px;
+  width: 420px;
   padding: 32px 36px 24px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+  border: 0.5px solid rgba(255, 255, 255, 0.65);
+  box-shadow: 0 22px 60px rgba(10, 60, 40, 0.18);
 }
 
-.auth-card__head {
-  text-align: center;
-  margin-bottom: 20px;
+.auth-card__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .auth-card__mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--brix-primary);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #16181d;
   color: #fff;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
 }
 
+.auth-card__brand-name {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #16181d;
+}
+
 .auth-card__title {
-  margin-top: 12px;
-  font-size: 20px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #16181d;
 }
 
 .auth-card__sub {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 13px;
-  color: var(--brix-text-secondary);
+  color: #7a8290;
+}
+
+.auth-card :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 0 0 1px #e6e9ee inset;
 }
 
 .auth-card__submit {
   width: 100%;
+  height: 44px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 12px;
+  background: #16181d;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.18s ease;
+}
+
+.auth-card__submit:hover {
+  background: #2a2d35;
+  color: #fff;
 }
 
 .auth-card__footer {
   margin-top: 14px;
   font-size: 13px;
-  color: var(--brix-text-secondary);
+  color: #7a8290;
 }
 
 .auth-card__link {

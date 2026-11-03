@@ -64,6 +64,10 @@ public class ItemSaveDTO implements Serializable {
     @Size(max = 50, message = "联系方式过长")
     private String contact;
 
+    /** 品牌型号，可选，≤60 字 */
+    @Size(max = 60, message = "品牌型号过长")
+    private String brandModel;
+
     /** 图片 URL 列表，0~9 张，顺序即展示顺序 */
     private List<String> images;
 }

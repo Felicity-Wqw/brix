@@ -3,6 +3,7 @@ package com.brix.campus.config;
 import com.brix.campus.ai.AiEstimator;
 import com.brix.campus.ai.AiRepository;
 import com.brix.campus.ai.AiTools;
+import com.brix.campus.ai.ItemAuditAgent;
 import com.brix.campus.ai.ItemEstimationAgent;
 import com.brix.campus.ai.LlmEstimator;
 import com.brix.campus.ai.RuleBasedEstimator;
@@ -13,7 +14,7 @@ import dev.langchain4j.service.AiServices;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -28,7 +29,7 @@ import java.time.Duration;
  *
  * <p>关于 {@code @ConditionalOnMissingBean}：本项目的规则引擎 {@link RuleBasedEstimator} 本身实现了
  * {@link AiEstimator}，且<b>必须同时作为 LLM 的降级目标存在</b>，因此两个 Bean 需要共存。
- * 这里改用「{@code @ConditionalOnProperty} 控制 LLM + {@code @Primary} 指定优先级」达成完全相同的效果：
+ * 这里改用「{@code @ConditionalOnExpression}（Key 非空才装配）控制 LLM + {@code @Primary} 指定优先级」达成完全相同的效果：
  * <ul>
  *   <li>无 Key：容器里只有 {@code ruleBasedEstimator} 一个 AiEstimator → 注入成功；</li>
  *   <li>有 Key：{@code llmEstimator} 为 {@code @Primary} → 注入到 LlmEstimator，规则引擎留作降级。</li>
@@ -51,14 +52,16 @@ public class AiConfig {
      * ChatModel：仅在配置了 {@code brix.ai.api-key} 时创建（空字符串等于未配置）。
      */
     @Bean
-    @ConditionalOnProperty(prefix = "brix.ai", name = "api-key")
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
     public ChatModel chatModel(@Value("${brix.ai.base-url}") String baseUrl,
                                @Value("${brix.ai.api-key}") String apiKey,
                                @Value("${brix.ai.model}") String modelName,
                                @Value("${brix.ai.timeout-seconds:10}") long timeoutSeconds) {
-        log.info("已启用 LLM 估价：baseUrl={}, model={}", baseUrl, modelName);
+        String effectiveBaseUrl = (baseUrl == null || baseUrl.isBlank())
+                ? "https://api.deepseek.com/v1" : baseUrl;
+        log.info("已启用 LLM：baseUrl={}, model={}", effectiveBaseUrl, modelName);
         return OpenAiChatModel.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(effectiveBaseUrl)
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .temperature(0.3d)
@@ -72,7 +75,7 @@ public class AiConfig {
      * AiServices 智能体：注册 3 个 {@code @Tool}，由模型按需多轮查库。
      */
     @Bean
-    @ConditionalOnProperty(prefix = "brix.ai", name = "api-key")
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
     public ItemEstimationAgent itemEstimationAgent(ChatModel chatModel, AiTools aiTools) {
         return AiServices.builder(ItemEstimationAgent.class)
                 .chatModel(chatModel)
@@ -85,8 +88,20 @@ public class AiConfig {
      */
     @Bean
     @Primary
-    @ConditionalOnProperty(prefix = "brix.ai", name = "api-key")
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
     public AiEstimator llmEstimator(ItemEstimationAgent itemEstimationAgent) {
         return new LlmEstimator(itemEstimationAgent);
+    }
+
+    /**
+     * 上架审核智能体：无工具、单轮结构化输出，专供发布合规第二道闸。
+     * 无 Key 时不创建，{@code PublishAuditServiceImpl} 自动降级为仅违禁词闸。
+     */
+    @Bean
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
+    public ItemAuditAgent itemAuditAgent(ChatModel chatModel) {
+        return AiServices.builder(ItemAuditAgent.class)
+                .chatModel(chatModel)
+                .build();
     }
 }

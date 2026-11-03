@@ -60,7 +60,7 @@ public class SecurityConfig {
                         .accessDeniedHandler(accessDeniedHandler))
                 .authorizeHttpRequests(registry -> registry
                         // 1. 完全公开的入口
-                        .requestMatchers("/auth/register", "/auth/login", "/admin/login").permitAll()
+                        .requestMatchers("/auth/register", "/auth/login").permitAll()
                         .requestMatchers("/uploads/**", "/ws/**", "/error").permitAll()
                         // 2. 公开的只读接口（注意 /items/mine 必须先于 /items/** 声明）
                         .requestMatchers(HttpMethod.GET, "/categories").permitAll()
@@ -68,19 +68,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/items/*/comments").permitAll()
                         .requestMatchers(HttpMethod.GET, "/items/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/*/reviews").permitAll()
-                        // 3. 后台细粒度权限：运营 + 审核员均可查看的只读取证接口
-                        //    注意：Spring Security 按声明顺序「先匹配先生效」，这两条必须早于
-                        //    /admin/orders/** 等运营专属规则，否则审核员会被前者拦掉（K13）。
-                        .requestMatchers(HttpMethod.GET, "/admin/orders/*/chat").hasAnyRole("REVIEWER", "OPERATOR")
-                        .requestMatchers(HttpMethod.GET, "/admin/chats").hasAnyRole("REVIEWER", "OPERATOR")
-                        // 3.1 后台细粒度权限：运营专属
-                        .requestMatchers("/admin/dashboard/**", "/admin/users/**",
-                                "/admin/orders/**", "/admin/categories/**").hasRole("OPERATOR")
-                        // 4. 后台细粒度权限：审核员专属
-                        .requestMatchers("/admin/items/**", "/admin/reports/**").hasRole("REVIEWER")
-                        // 5. 其余后台接口：任一后台角色
-                        .requestMatchers("/admin/**").hasAnyRole("REVIEWER", "OPERATOR")
-                        // 6. 其余全部需要登录
+                        // 3. 其余全部需要登录
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

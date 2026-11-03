@@ -1,5 +1,17 @@
 # Brix Campus Market 系统架构设计（ARCHITECTURE）
 
+> ## ⚠️ 变更说明（以代码为准）
+>
+> 本文档写于项目初期，以下后续演进**已实施**，与正文冲突处以本说明和代码为准：
+>
+> 1. **角色精简**：删除 `REVIEWER`（审核员）与 `OPERATOR`（运营）两个后台角色及全部 admin 功能（数据大屏、用户管理、举报处理端、分类管理端，前后端一并移除）。现仅剩 `GUEST` / `USER`。
+> 2. **发布合规改为两道闸**：原「商品 PENDING → 人工审核 → 上架/拒绝」流程废弃。现为「① 违禁词黑名单闸（内置词表，命中即拒）→ ② AI 审核员闸（LangChain4j 四选一判定：PASS / REJECT_BAN / REJECT_REVISE / REPORT_RISK，附法规依据）→ 通过后**直接 ON_SALE**」。降级原则：AI 只能拒绝、不能故障阻断（无 Key / 超时 / 异常 / 未知判定一律放行）；审核调用不消耗用户每日 AI 额度。`t_item` 不再有 `reject_reason / audited_by / audited_at` 三列，`PENDING`/`REJECTED` 状态不再落库。
+> 3. **`t_item` 结构变更**：新增 `brand_model VARCHAR(60)`（品牌型号）；`status` 默认值仍为 `PENDING` 但业务上创建即 `ON_SALE`。
+> 4. **分类二级化**：`t_category` 新增 `parent_id`；6 个一级 + 27 个二级分类；列表筛选选一级时含全部子类商品；发布页为级联选择；分类展示名带父类前缀（如「数码电子 / 手机/平板」）。
+> 5. **面交流程简化**：**无面交确认码/核销**。面交单 `TO_MEET` 由买家线下见面后直接确认完成（`→ DONE`），邮寄单 `TO_RECEIVE` 确认收货完成。
+> 6. **新增功能**：AI 估价引用 90 天成交统计（`soldPriceStats` 工具）、分类驱动的 AI 文案生成、个人买卖可视化分析（`GET /users/me/analysis`）、浏览历史（`t_browse_history` + `GET /users/me/browse-history`）、详情页同类推荐（`GET /items/{id}/similar`）、发布页品牌快捷标签。
+> 7. **测试账号**：仅 `student01`（买家视角主号）与 `seller01`（卖家视角主号），密码为文档统一演示口令（见 README 快速开始）。
+
 > 版本：**v2.0（按《SpringBoot + Vue3 项目指导书》工程规范重写）** ｜ 上游输入：`docs/PRD.md`（v1.0，69 条需求 / 19 页 / 11 表 / 55 个接口位）
 > 本文是**契约级文档**：只给表结构、接口签名、类契约、配置片段、任务顺序，不写业务实现代码。工程师照此直接落地。
 > 语言：中文注释与中文提示文案；标识符英文 camelCase。
@@ -315,10 +327,8 @@ brix-campus-market/
 | cover_image | VARCHAR(255) | 否 | '' | 首图（与 `t_item_image.sort` 最小同步） |
 | view_count | INT | 否 | 0 | 浏览量（10 分钟去重） |
 | favorite_count | INT | 否 | 0 | 收藏数 |
-| reject_reason | VARCHAR(200) | 是 | NULL | 审核拒绝原因 |
+| brand_model | VARCHAR(60) | 是 | NULL | 品牌型号（选填） |
 | seller_id | BIGINT UNSIGNED | 否 | - | 卖家 |
-| audited_by | BIGINT UNSIGNED | 是 | NULL | 审核人 |
-| audited_at | DATETIME | 是 | NULL | 审核时间 |
 | deleted / created_at / updated_at | - | - | - | 审计 |
 
 索引：`KEY idx_status_created(status, created_at)`、`KEY idx_category(category_id, status)`、`KEY idx_seller(seller_id, status)`、`KEY idx_campus_status(campus, status)`、`KEY idx_price(price)`。
@@ -505,11 +515,12 @@ UPDATE t_item SET status = 'ON_SALE', updated_at = NOW()
 
 | 方法 | 路径 | 权限 | 入参 | 出参 | PRD |
 | --- | --- | --- | --- | --- | --- |
-| POST | `/items` | USER | `ItemSaveDTO{title,description,categoryId,price,originalPrice,conditionLevel,campus,tradeType,contact,images[]}` | `R<ItemVO{id,status}>` | B01 |
-| GET | `/items` | PUBLIC | `ItemQuery{keyword,categoryId,campus,minPrice,maxPrice,sort,currentPage,pageSize}` | `R<IPage<ItemVO>>` | B02 |
-| GET | `/items/{id}` | PUBLIC（带 token 时补 `isFavorite`） | `@PathVariable("id") Long id` | `R<ItemDetailVO>`，浏览量 +1 | B03 |
-| GET | `/items/mine` | USER | `ItemQuery{status,currentPage,pageSize}` | `R<IPage<ItemVO>>`（含 `rejectReason`） | B04 |
-| PUT | `/items/{id}` | USER（本人） | `ItemSaveDTO` | `R<Void>`（状态回 `PENDING`） | B05 |
+| POST | `/items` | USER | `ItemSaveDTO{title,description,categoryId,price,originalPrice,conditionLevel,campus,tradeType,contact,brandModel,images[]}` | `R<ItemVO{id,status=ON_SALE}>`（合规两道闸通过后直接上架） | B01 |
+| GET | `/items` | PUBLIC | `ItemQuery{keyword,categoryId,campus,minPrice,maxPrice,sort,currentPage,pageSize}` | `R<IPage<ItemVO>>`（选一级分类时含其子类商品） | B02 |
+| GET | `/items/{id}` | PUBLIC（带 token 时补 `isFavorite`） | `@PathVariable("id") Long id` | `R<ItemDetailVO>`，浏览量 +1，登录用户记录浏览历史 | B03 |
+| GET | `/items/{id}/similar` | PUBLIC | `@PathVariable("id") Long id` | `R<List<ItemVO>>`（同类推荐，最多 4 件） | B03+ |
+| GET | `/items/mine` | USER | `ItemQuery{status,currentPage,pageSize}` | `R<IPage<ItemVO>>` | B04 |
+| PUT | `/items/{id}` | USER（本人） | `ItemSaveDTO` | `R<Void>`（状态保持 `ON_SALE`，重新过合规闸） | B05 |
 | DELETE | `/items/{id}` | USER（本人） | — | `R<Void>`（逻辑删除） | B06 |
 | PATCH | `/items/{id}/status` | USER（本人） | `ItemStatusDTO{action:ON_SALE\|OFF_SHELF}` | `R<ItemVO{status}>` | B07 |
 | GET | `/categories` | PUBLIC | — | `R<List<CategoryVO>>`（按 `sort` 升序） | B09 |
@@ -1736,10 +1747,8 @@ CREATE TABLE t_item (
   cover_image     VARCHAR(255)    NOT NULL DEFAULT ''     COMMENT '首图',
   view_count      INT             NOT NULL DEFAULT 0,
   favorite_count  INT             NOT NULL DEFAULT 0,
-  reject_reason   VARCHAR(200)    DEFAULT NULL            COMMENT '审核拒绝原因',
+  brand_model     VARCHAR(60)     DEFAULT NULL            COMMENT '品牌型号',
   seller_id       BIGINT UNSIGNED NOT NULL,
-  audited_by      BIGINT UNSIGNED DEFAULT NULL,
-  audited_at      DATETIME        DEFAULT NULL,
   deleted         TINYINT         NOT NULL DEFAULT 0,
   created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1902,14 +1911,15 @@ CREATE TABLE t_ai_estimate_log (
 
 ## 附录 B：`db/data.sql` 种子数据清单（N08）
 
-| 项 | 要求 |
+> **已按后期演进重做**（详见文首「变更说明」）：账号精简为 2 个、分类二级化、订单改为 90 天成交底座、面交无核销码。
+
+| 项 | 现状 |
 | --- | --- |
-| 用户（8） | `student01`（USER，演示主号）、`reviewer01`（REVIEWER）、`operator01`（OPERATOR）、`seller01`~`seller05`（USER）；密码统一 `123456` 的 BCrypt 密文（跑一次 `new BCryptPasswordEncoder().encode("123456")` 生成后写死，全表复用同一串）；学校「示例大学」，campus 分布于 `东校区/西校区/南校区`；`credit_score` 98~120 随机 |
-| 分类（6） | 数码电子、电脑办公、图书教材、生活用品、运动户外、美妆个护，`sort` 1~6，各配 Element Plus 图标名 |
-| 商品（36） | 每分类 6 件；状态分布 **ON_SALE 24 / PENDING 5 / SOLD 4 / OFF_SHELF 3**；`PENDING` 用于演示审核，`OFF_SHELF` 各带 `reject_reason` 或主动下架；价格锚点：iPad 9 64G ¥1280、AirPods Pro 2 ¥890、红米 27 寸 2K ¥420、张宇考研数学全套 ¥85；`condition_level` 四种均有；`trade_type` 三种均有；`view_count` 30~400，`favorite_count` 0~25 |
+| 用户（2） | `student01`（小林同学，**买家视角主号**：约 58 笔买入 / 10 笔卖出）、`seller01`（阿哲的数码铺，**卖家视角主号**：约 58 笔卖出 / 10 笔买入）；密码为文档统一演示口令的 BCrypt 密文（`$2a$` 前缀，`data.sql` 与库内一致）；学校「示例大学」，campus 分布于东/西/南校区 |
+| 分类（6+27） | 6 个一级（数码电子、电脑办公、图书教材、生活用品、运动户外、美妆个护）+ 27 个二级（`parent_id` 指向一级，id 7~33，如手机/平板、耳机/音箱、笔记本……） |
+| 商品（36 + 65） | 基础 36 件（id 1~36，状态 ON_SALE / OFF_SHELF / SOLD 均有，**无 PENDING/REJECTED**——发布合规闸在落库前拦截）；另有 65 件 90 天成交快照（id 37~101，全部 SOLD，覆盖 24 个关键词，作为 AI 估价 `soldPriceStats` 工具的数据底座）；商品全部归属两个演示账号；`brand_model` 按标题提取（iPad/小米/罗技等，图书类为 NULL） |
 | 图片 | 每商品 2~3 张，URL 指向 `/uploads/seed/{n}.jpg`（把 6 张示例图放进 `backend/uploads/seed/`，前端 `resolveImage` 拼 `VITE_BACKEND`） |
-| 订单（≥4） | ① `TO_MEET` 面交待核销（`trade_code='042317'`，`code_fail_count=0`）② `TO_SHIP` 邮寄待发货 ③ `DONE` 已完成（供评价演示）④ `CANCELED`+`TIMEOUT`（验证状态渲染）；金额与 `item_price` 一致，时间在近 7 天内（趋势图非空） |
-| 评价（≥3） | 挂在 `DONE` 订单；评分 5/4/3 各一条；`seller01` 平均分可算 |
-| 举报（2） | 一条 `PENDING`（待处理演示）、一条 `HANDLED`+`OFFLINE`（已处理演示） |
-| 私信（≥6） | `student01` ↔ `seller01` 双向各 3 条，其中 2 条 `is_read=0`（演示未读红点） |
+| 订单（60+） | ① 面交单 `TO_MEET`（**无核销码**，买家线下见面后直接确认完成 → `DONE`）② 邮寄单 `TO_SHIP` → 买家确认收货 → `DONE` ③ 大量近 90 天 `DONE` 订单（与成交快照商品一一对应，供个人分析页与估价统计）④ 少量 `CANCELED`；金额与 `item_price` 一致 |
+| 评价 | 挂在 `DONE` 订单；评分 5/4/3 均有，`seller01` 平均分可算 |
+| 私信 | `student01` ↔ `seller01` 双向若干条，含未读红点演示 |
 | 约束 | `data.sql` 用 `TRUNCATE` / `DELETE` + 显式 `id` 写入，保证重复导入结果一致；外键关系靠 id 手工对齐（不建外键约束，便于删改） |

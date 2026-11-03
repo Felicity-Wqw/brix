@@ -79,6 +79,15 @@
               <span class="profile__stat-label">信用分</span>
             </div>
           </div>
+          <el-button
+            class="profile__analysis-btn"
+            type="primary"
+            plain
+            @click="router.push('/my/analysis')"
+          >
+            <el-icon style="margin-right: 4px"><TrendCharts /></el-icon>
+            查看数据分析
+          </el-button>
         </div>
 
         <div class="profile__card brix-card">
@@ -107,12 +116,14 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { changePassword as changePasswordApi, updateProfile, uploadAvatar } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
 import { CAMPUS_OPTIONS } from '@/constants'
 import { nicknameInitial, resolveImage } from '@/utils/format'
 
 const auth = useAuthStore()
+const router = useRouter()
 
 const profileRef = ref(null)
 const passwordRef = ref(null)
@@ -367,6 +378,12 @@ onMounted(async () => {
 .profile__stat-label {
   font-size: 12px;
   color: var(--brix-text-placeholder);
+}
+
+.profile__analysis-btn {
+  width: 100%;
+  margin-top: 14px;
+  border-radius: 8px;
 }
 
 .profile__password-tip {

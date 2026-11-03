@@ -11,7 +11,7 @@ public enum OrderStatusEnum {
     TO_SHIP("TO_SHIP", "待发货"),
     /** 待收货（邮寄单已发货） */
     TO_RECEIVE("TO_RECEIVE", "待收货"),
-    /** 待面交（面交单已支付，已生成确认码） */
+    /** 待面交（面交单已支付，等待线下见面完成交易） */
     TO_MEET("TO_MEET", "待面交"),
     /** 已完成 */
     DONE("DONE", "已完成"),

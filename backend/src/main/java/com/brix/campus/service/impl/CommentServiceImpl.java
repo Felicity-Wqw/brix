@@ -43,6 +43,10 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     public IPage<CommentVO> pageByItem(Long itemId, CommentQuery query, Long viewerId) {
+        // 卖家查看自己商品的留言 = 已读，顺带清除导航红点
+        if (viewerId != null) {
+            markRead(viewerId, itemId);
+        }
         long current = query.getCurrentPage() == null ? 1L : query.getCurrentPage();
         long size = query.getPageSize() == null ? 10L : query.getPageSize();
         Page<ItemComment> page = new Page<>(current, size);
@@ -113,6 +117,8 @@ public class CommentServiceImpl implements CommentService {
         comment.setUserId(userId);
         comment.setParentId(parentId);
         comment.setContent(dto.getContent().trim());
+        // 商品主人自己留言不打扰自己；他人留言默认未读，触发卖家导航红点
+        comment.setIsRead(userId.equals(item.getSellerId()) ? 1 : 0);
         itemCommentMapper.insert(comment);
 
         Map<Long, String> nicknames = new HashMap<>();
@@ -187,5 +193,45 @@ public class CommentServiceImpl implements CommentService {
         vo.setCreatedAt(comment.getCreatedAt());
         vo.setCanDelete(viewerId != null && viewerId.equals(comment.getUserId()));
         return vo;
+    }
+
+    /**
+     * 卖家查看自己商品时，把该商品上他人留言标记为已读（清除红点）。
+     *
+     * @param viewerId 查看者
+     * @param itemId   商品 ID
+     */
+    private void markRead(Long viewerId, Long itemId) {
+        Item item = itemMapper.selectById(itemId);
+        if (item == null || !viewerId.equals(item.getSellerId())) {
+            return;
+        }
+        itemCommentMapper.update(null, Wrappers.<ItemComment>lambdaUpdate()
+                .eq(ItemComment::getItemId, itemId)
+                .eq(ItemComment::getIsRead, 0)
+                .ne(ItemComment::getUserId, viewerId)
+                .set(ItemComment::getIsRead, 1));
+    }
+
+    @Override
+    public Map<String, Object> unreadSummary(Long sellerId) {
+        // 我发布的商品 ID 集合
+        List<Long> myItemIds = itemMapper.selectList(Wrappers.<Item>lambdaQuery()
+                        .eq(Item::getSellerId, sellerId))
+                .stream().map(Item::getId).toList();
+        Map<String, Object> result = new HashMap<>();
+        if (myItemIds.isEmpty()) {
+            result.put("count", 0L);
+            result.put("latestItemId", null);
+            return result;
+        }
+        List<ItemComment> unread = itemCommentMapper.selectList(Wrappers.<ItemComment>lambdaQuery()
+                .in(ItemComment::getItemId, myItemIds)
+                .eq(ItemComment::getIsRead, 0)
+                .ne(ItemComment::getUserId, sellerId)
+                .orderByDesc(ItemComment::getCreatedAt));
+        result.put("count", (long) unread.size());
+        result.put("latestItemId", unread.isEmpty() ? null : unread.get(0).getItemId());
+        return result;
     }
 }

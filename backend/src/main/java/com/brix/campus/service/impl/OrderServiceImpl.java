@@ -20,15 +20,12 @@ import com.brix.campus.model.enums.CloseReasonEnum;
 import com.brix.campus.model.enums.ItemStatusEnum;
 import com.brix.campus.model.enums.OrderStatusEnum;
 import com.brix.campus.model.enums.PayMethodEnum;
-import com.brix.campus.model.enums.RoleEnum;
 import com.brix.campus.model.enums.TradeTypeEnum;
 import com.brix.campus.model.query.OrderQuery;
-import com.brix.campus.model.vo.AdminOrderVO;
 import com.brix.campus.model.vo.OrderDetailVO;
 import com.brix.campus.model.vo.OrderVO;
 import com.brix.campus.service.OrderService;
 import com.brix.campus.util.OrderNoGenerator;
-import com.brix.campus.util.TradeCodeGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,21 +54,17 @@ public class OrderServiceImpl implements OrderService {
     private final UserMapper userMapper;
     private final ReviewMapper reviewMapper;
     private final int unpaidTimeoutMinutes;
-    /** 面交码最大可错次数（与 TradeCodeService 共用同一配置项，默认 5） */
-    private final int tradeCodeMaxFail;
 
     public OrderServiceImpl(OrderMapper orderMapper,
                             ItemMapper itemMapper,
                             UserMapper userMapper,
                             ReviewMapper reviewMapper,
-                            @Value("${brix.order.unpaid-timeout-minutes:30}") int unpaidTimeoutMinutes,
-                            @Value("${brix.trade-code.max-fail:5}") int tradeCodeMaxFail) {
+                            @Value("${brix.order.unpaid-timeout-minutes:30}") int unpaidTimeoutMinutes) {
         this.orderMapper = orderMapper;
         this.itemMapper = itemMapper;
         this.userMapper = userMapper;
         this.reviewMapper = reviewMapper;
         this.unpaidTimeoutMinutes = unpaidTimeoutMinutes;
-        this.tradeCodeMaxFail = tradeCodeMaxFail;
     }
 
     @Override
@@ -97,6 +90,30 @@ public class OrderServiceImpl implements OrderService {
 
         String tradeType = resolveTradeType(item, dto.getTradeType());
 
+        // 按成交方式做交叉必填校验：面交=时间+地点；邮寄=收货三件套
+        boolean isMeet = TradeTypeEnum.MEET.getCode().equals(tradeType);
+        if (isMeet) {
+            if (dto.getMeetTime() == null) {
+                throw BusinessException.param("请选择面交时间");
+            }
+            if (dto.getMeetTime().isBefore(LocalDateTime.now())) {
+                throw BusinessException.param("面交时间不能早于当前时间");
+            }
+            if (dto.getMeetPlace() == null || dto.getMeetPlace().isBlank()) {
+                throw BusinessException.param("请填写面交地点");
+            }
+        } else {
+            if (dto.getReceiverName() == null || dto.getReceiverName().isBlank()) {
+                throw BusinessException.param("请填写收货人姓名");
+            }
+            if (dto.getReceiverPhone() == null || dto.getReceiverPhone().isBlank()) {
+                throw BusinessException.param("请填写收货人手机号");
+            }
+            if (dto.getReceiverAddress() == null || dto.getReceiverAddress().isBlank()) {
+                throw BusinessException.param("请填写收货地址");
+            }
+        }
+
         Order order = new Order();
         order.setOrderNo(OrderNoGenerator.generate());
         order.setItemId(item.getId());
@@ -108,8 +125,14 @@ public class OrderServiceImpl implements OrderService {
         order.setItemPrice(item.getPrice());
         order.setTradeType(tradeType);
         order.setStatus(OrderStatusEnum.UNPAID.getCode());
-        order.setCodeFailCount(0);
-        order.setMeetPlace(TradeTypeEnum.MEET.getCode().equals(tradeType) ? dto.getMeetPlace() : null);
+        if (isMeet) {
+            order.setMeetTime(dto.getMeetTime());
+            order.setMeetPlace(dto.getMeetPlace().trim());
+        } else {
+            order.setReceiverName(dto.getReceiverName().trim());
+            order.setReceiverPhone(dto.getReceiverPhone().trim());
+            order.setReceiverAddress(dto.getReceiverAddress().trim());
+        }
         order.setBuyerNote(dto.getBuyerNote());
         orderMapper.insert(order);
 
@@ -158,17 +181,7 @@ public class OrderServiceImpl implements OrderService {
             throw BusinessException.param("订单状态已变更，请刷新");
         }
 
-        // ③ 面交单同事务生成 6 位确认码（含前导 0，只生成一次）
-        if (OrderStatusEnum.TO_MEET.getCode().equals(targetStatus)) {
-            String tradeCode = TradeCodeGenerator.generate();
-            orderMapper.update(null, new LambdaUpdateWrapper<Order>()
-                    .eq(Order::getId, orderId)
-                    .isNull(Order::getTradeCode)
-                    .set(Order::getTradeCode, tradeCode)
-                    .set(Order::getCodeFailCount, 0));
-        }
-
-        // ④ 关闭同一商品其它待付款订单
+        // ③ 关闭同一商品其它待付款订单
         orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .eq(Order::getItemId, order.getItemId())
                 .eq(Order::getStatus, OrderStatusEnum.UNPAID.getCode())
@@ -215,14 +228,19 @@ public class OrderServiceImpl implements OrderService {
         if (!order.getBuyerId().equals(userId)) {
             throw BusinessException.forbidden("无权操作该订单");
         }
-        if (!OrderStatusEnum.TO_RECEIVE.getCode().equals(order.getStatus())) {
+        // 邮寄单确认收货、面交单确认完成交易
+        boolean confirmable = OrderStatusEnum.TO_RECEIVE.getCode().equals(order.getStatus())
+                || OrderStatusEnum.TO_MEET.getCode().equals(order.getStatus());
+        if (!confirmable) {
             throw BusinessException.param("当前订单状态不支持该操作");
         }
         int rows = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
                 .eq(Order::getId, orderId)
-                .eq(Order::getStatus, OrderStatusEnum.TO_RECEIVE.getCode())
+                .eq(Order::getStatus, order.getStatus())
                 .set(Order::getStatus, OrderStatusEnum.DONE.getCode())
-                .set(Order::getFinishTime, LocalDateTime.now()));
+                .set(Order::getFinishTime, LocalDateTime.now())
+                // 托管释放：买家确认收货，预付款同一事务内结算给卖家
+                .set(Order::getSettleTime, LocalDateTime.now()));
         if (rows == 0) {
             throw BusinessException.param("当前订单状态不支持该操作");
         }
@@ -303,8 +321,7 @@ public class OrderServiceImpl implements OrderService {
         }
         boolean isBuyer = order.getBuyerId().equals(userId);
         boolean isSeller = order.getSellerId().equals(userId);
-        boolean isAdmin = RoleEnum.isAdmin(role);
-        if (!isBuyer && !isSeller && !isAdmin) {
+        if (!isBuyer && !isSeller) {
             throw BusinessException.forbidden("无权查看该订单");
         }
 
@@ -338,82 +355,7 @@ public class OrderServiceImpl implements OrderService {
         } else {
             vo.setPayRemainSeconds(0L);
         }
-
-        int failCount = order.getCodeFailCount() == null ? 0 : order.getCodeFailCount();
-        vo.setRemainingAttempts(Math.max(0, tradeCodeMaxFail - failCount));
-        vo.setCodeLocked(failCount >= tradeCodeMaxFail);
         return vo;
-    }
-
-    @Override
-    public IPage<AdminOrderVO> adminPage(OrderQuery query) {
-        Page<AdminOrderVO> page = new Page<>(pageOf(query), sizeOf(query));
-        IPage<AdminOrderVO> result = orderMapper.selectAdminPage(page, query);
-        result.getRecords().forEach(this::fillAdminDesc);
-        return result;
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AdminOrderVO resetTradeCode(Long orderId) {
-        Order order = getEntity(orderId);
-        if (order == null) {
-            throw BusinessException.notFound("订单不存在");
-        }
-        if (!OrderStatusEnum.TO_MEET.getCode().equals(order.getStatus())) {
-            throw BusinessException.param("仅「待面交」订单可重置核销次数");
-        }
-        int failCount = order.getCodeFailCount() == null ? 0 : order.getCodeFailCount();
-        if (failCount < tradeCodeMaxFail) {
-            throw BusinessException.param(
-                    "该订单核销次数未锁定（已失败 " + failCount + " 次），无需重置");
-        }
-        // 条件更新：仅当仍是待面交且确实处于锁定态时清零，避免并发下误清未锁定的计数
-        int rows = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
-                .eq(Order::getId, orderId)
-                .eq(Order::getStatus, OrderStatusEnum.TO_MEET.getCode())
-                .ge(Order::getCodeFailCount, tradeCodeMaxFail)
-                .set(Order::getCodeFailCount, 0));
-        if (rows == 0) {
-            throw BusinessException.param("订单状态已变更，请刷新后重试");
-        }
-        return adminOne(orderId);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public AdminOrderVO forceCancel(Long orderId) {
-        Order order = getEntity(orderId);
-        if (order == null) {
-            throw BusinessException.notFound("订单不存在");
-        }
-        String status = order.getStatus();
-        boolean cancellable = OrderStatusEnum.TO_MEET.getCode().equals(status)
-                || OrderStatusEnum.TO_SHIP.getCode().equals(status);
-        if (!cancellable) {
-            throw BusinessException.param(
-                    "仅「待面交」或「待发货」订单可强制取消，当前状态：" + OrderStatusEnum.descOf(status));
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        int rows = orderMapper.update(null, new LambdaUpdateWrapper<Order>()
-                .eq(Order::getId, orderId)
-                .eq(Order::getStatus, status)
-                .set(Order::getStatus, OrderStatusEnum.CANCELED.getCode())
-                .set(Order::getCloseReason, CloseReasonEnum.SYSTEM.getCode())
-                .set(Order::getCancelTime, now));
-        if (rows == 0) {
-            throw BusinessException.param("订单状态已变更，请刷新后重试");
-        }
-
-        // 已售出商品回滚为在售（条件更新，避免误回滚他人已成交商品）
-        itemMapper.update(null, new LambdaUpdateWrapper<Item>()
-                .eq(Item::getId, order.getItemId())
-                .eq(Item::getStatus, ItemStatusEnum.SOLD.getCode())
-                .set(Item::getStatus, ItemStatusEnum.ON_SALE.getCode())
-                .set(Item::getUpdatedAt, now));
-
-        return adminOne(orderId);
     }
 
     @Override
@@ -437,31 +379,6 @@ public class OrderServiceImpl implements OrderService {
     }
 
     /* --------------------------- 内部工具方法 --------------------------- */
-
-    /**
-     * 取订单并补齐状态 / 支付方式文案（运营操作后回显用）。
-     *
-     * @param orderId 订单 ID
-     * @return 后台订单 VO
-     */
-    private AdminOrderVO adminOne(Long orderId) {
-        AdminOrderVO vo = orderMapper.selectAdminById(orderId);
-        if (vo == null) {
-            throw BusinessException.notFound("订单不存在");
-        }
-        fillAdminDesc(vo);
-        return vo;
-    }
-
-    /**
-     * 补齐后台订单列表中的字典文案字段。
-     *
-     * @param vo 后台订单 VO
-     */
-    private void fillAdminDesc(AdminOrderVO vo) {
-        vo.setStatusDesc(OrderStatusEnum.descOf(vo.getStatus()));
-        vo.setPayMethodDesc(vo.getPayMethod() == null ? null : PayMethodEnum.descOf(vo.getPayMethod()));
-    }
 
     /**
      * 解析实际成交方式：商品为 {@code BOTH} 时由买家二选一。
@@ -565,21 +482,29 @@ public class OrderServiceImpl implements OrderService {
         vo.setBuyerNickname(nicknames.get(order.getBuyerId()));
         vo.setSellerNickname(nicknames.get(order.getSellerId()));
         vo.setMeetPlace(order.getMeetPlace());
-        vo.setCodeFailCount(order.getCodeFailCount());
+        vo.setMeetTime(order.getMeetTime());
+        vo.setReceiverName(order.getReceiverName());
+        vo.setReceiverPhone(order.getReceiverPhone());
+        vo.setReceiverAddress(order.getReceiverAddress());
+        vo.setSettleTime(order.getSettleTime());
+        // 托管状态：已付款未完成 = 托管中；完成 = 已结算给卖家
+        if (order.getSettleTime() != null) {
+            vo.setEscrowDesc("已结算给卖家");
+        } else if (order.getPayTime() != null) {
+            vo.setEscrowDesc("预付款托管中");
+        }
 
         boolean isBuyer = viewerId != null && viewerId.equals(order.getBuyerId());
         boolean isSeller = viewerId != null && viewerId.equals(order.getSellerId());
-        boolean isAdmin = RoleEnum.isAdmin(role);
-        String viewerRole = isBuyer ? "BUYER" : (isSeller ? "SELLER" : (isAdmin ? "ADMIN" : "GUEST"));
+        String viewerRole = isBuyer ? "BUYER" : (isSeller ? "SELLER" : "GUEST");
         vo.setViewerRole(viewerRole);
 
         String status = order.getStatus();
-        // 面交码仅买卖双方可见
-        vo.setTradeCode((isBuyer || isSeller) ? order.getTradeCode() : null);
 
         vo.setCanPay(isBuyer && OrderStatusEnum.UNPAID.getCode().equals(status));
         vo.setCanShip(isSeller && OrderStatusEnum.TO_SHIP.getCode().equals(status));
-        vo.setCanConfirm(isBuyer && OrderStatusEnum.TO_RECEIVE.getCode().equals(status));
+        vo.setCanConfirm(isBuyer && (OrderStatusEnum.TO_RECEIVE.getCode().equals(status)
+                || OrderStatusEnum.TO_MEET.getCode().equals(status)));
         boolean cancellable = OrderStatusEnum.isOngoing(status)
                 && !(OrderStatusEnum.UNPAID.getCode().equals(status) && !isBuyer)
                 && (isBuyer || isSeller);
@@ -623,7 +548,12 @@ public class OrderServiceImpl implements OrderService {
         target.setBuyerNickname(source.getBuyerNickname());
         target.setSellerNickname(source.getSellerNickname());
         target.setMeetPlace(source.getMeetPlace());
-        target.setCodeFailCount(source.getCodeFailCount());
+        target.setMeetTime(source.getMeetTime());
+        target.setReceiverName(source.getReceiverName());
+        target.setReceiverPhone(source.getReceiverPhone());
+        target.setReceiverAddress(source.getReceiverAddress());
+        target.setEscrowDesc(source.getEscrowDesc());
+        target.setSettleTime(source.getSettleTime());
         target.setViewerRole(source.getViewerRole());
         target.setCanPay(source.getCanPay());
         target.setCanShip(source.getCanShip());
@@ -631,7 +561,6 @@ public class OrderServiceImpl implements OrderService {
         target.setCanCancel(source.getCanCancel());
         target.setCanReview(source.getCanReview());
         target.setReviewed(source.getReviewed());
-        target.setTradeCode(source.getTradeCode());
     }
 
     /**

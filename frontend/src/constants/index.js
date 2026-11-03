@@ -20,7 +20,7 @@ export const RESULT_CODE = {
 /** 分页默认值（与后端 currentPage / pageSize 对齐） */
 export const DEFAULT_PAGE = {
   currentPage: 1,
-  pageSize: 10
+  pageSize: 12
 }
 
 /** 私信分页默认值（后端默认 20） */
@@ -43,9 +43,7 @@ export const CAMPUS_OPTIONS = ['东校区', '西校区', '南校区']
 
 /** 角色字典 */
 export const ROLE_DICT = {
-  USER: { label: '普通用户', color: '' },
-  REVIEWER: { label: '审核员', color: 'warning' },
-  OPERATOR: { label: '运营', color: 'success' }
+  USER: { label: '普通用户', color: '' }
 }
 
 /** 用户状态字典 */
@@ -135,24 +133,43 @@ export const SORT_OPTIONS = [
 /** 商品图片上限 */
 export const MAX_ITEM_IMAGES = 9
 
+/**
+ * 品牌快捷标签：子类名 → 常见品牌列表。
+ *
+ * <p>发布页选择子类后展示对应标签，点击一键填入「品牌型号」；无匹配的子类不展示。</p>
+ */
+export const BRAND_TAGS_BY_CATEGORY = {
+  '手机/平板': ['iPhone', '华为', '小米', 'iPad', '红米', '荣耀', 'OPPO', 'vivo'],
+  '耳机/音箱': ['AirPods', '索尼', 'Bose', 'JBL', '小米', '漫步者'],
+  '相机/无人机': ['佳能', '索尼', '尼康', '富士', '大疆'],
+  '智能手表/手环': ['Apple Watch', '小米手环', '华为手环', '华米'],
+  '游戏设备': ['Switch', 'PS5', 'Xbox', 'Steam Deck'],
+  '数码配件': ['倍思', '绿联', 'Anker', '紫米'],
+  笔记本: ['联想', '华硕', '戴尔', 'MacBook', '惠普', '机械革命'],
+  '台式机/一体机': ['联想', '戴尔', '惠普', 'iMac'],
+  显示器: ['戴尔', 'AOC', '三星', 'LG', '红米'],
+  键鼠外设: ['罗技', '雷蛇', 'HHKB', 'Cherry', '达尔优'],
+  '打印机/办公设备': ['惠普', '佳能', '兄弟', '爱普生'],
+  小家电: ['美的', '苏泊尔', '九阳', '米家', '小米'],
+  '家具/床品': ['宜家', '网易严选', '源氏木语'],
+  厨房用品: ['苏泊尔', '九阳', '美的'],
+  '收纳/清洁': ['宜家', '妙洁', '美丽雅'],
+  球类运动: ['斯伯丁', '李宁', '尤尼克斯'],
+  健身器材: ['Keep', '迪卡侬', '舒华'],
+  户外装备: ['骆驼', '迪卡侬', '探路者', '牧高笛'],
+  '骑行/球鞋': ['捷安特', '美利达', '耐克', '阿迪达斯', '李宁'],
+  鞋靴: ['耐克', '阿迪达斯', '新百伦', '李宁'],
+  箱包: ['新秀丽', '小米', '90分'],
+  自行车: ['捷安特', '美利达', '凤凰', '永久'],
+  电动车: ['雅迪', '爱玛', '小牛', '九号'],
+  '滑板/平衡车': ['小米', '九号', ' Rodney'],
+  '电子书/阅读器': ['Kindle', '掌阅', '文石'],
+  '存储/硬盘': ['闪迪', '三星', '西数', '金士顿'],
+  网络设备: ['小米', 'TP-LINK', '华硕']
+}
+
 /** 评价图片上限 */
 export const MAX_REVIEW_IMAGES = 3
 
 /** 待付款超时（分钟），与后端 brix.order.unpaid-timeout-minutes 一致 */
 export const UNPAID_TIMEOUT_MINUTES = 30
-
-/** 后台菜单（刷新后按 role 本地重建，与后端 LoginVO.menus 保持一致） */
-export const ADMIN_MENUS = {
-  OPERATOR: [
-    { key: 'dashboard', title: '数据大屏', path: '/admin/dashboard', icon: 'DataLine' },
-    { key: 'users', title: '用户管理', path: '/admin/users', icon: 'User' },
-    { key: 'orders', title: '订单管理', path: '/admin/orders', icon: 'List' },
-    { key: 'categories', title: '分类管理', path: '/admin/categories', icon: 'Menu' },
-    { key: 'chats', title: '私信记录', path: '/admin/chats', icon: 'ChatDotRound' }
-  ],
-  REVIEWER: [
-    { key: 'items', title: '商品审核', path: '/admin/items', icon: 'Goods' },
-    { key: 'reports', title: '举报处理', path: '/admin/reports', icon: 'Warning' },
-    { key: 'chats', title: '私信记录', path: '/admin/chats', icon: 'ChatDotRound' }
-  ]
-}

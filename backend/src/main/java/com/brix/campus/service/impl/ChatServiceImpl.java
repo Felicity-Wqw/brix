@@ -5,21 +5,14 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.brix.campus.common.BusinessException;
 import com.brix.campus.mapper.ChatMessageMapper;
-import com.brix.campus.mapper.OrderMapper;
 import com.brix.campus.mapper.UserMapper;
 import com.brix.campus.model.ChatMessage;
-import com.brix.campus.model.Order;
 import com.brix.campus.model.User;
 import com.brix.campus.model.dto.ChatSendDTO;
 import com.brix.campus.model.enums.UserStatusEnum;
-import com.brix.campus.model.query.AdminChatQuery;
 import com.brix.campus.model.query.ChatQuery;
-import com.brix.campus.model.vo.AdminChatVO;
 import com.brix.campus.model.vo.ChatMessageVO;
-import com.brix.campus.model.vo.ChatUserVO;
 import com.brix.campus.model.vo.ConversationVO;
-import com.brix.campus.model.vo.OrderChatMessageVO;
-import com.brix.campus.model.vo.OrderChatVO;
 import com.brix.campus.service.ChatService;
 import com.brix.campus.ws.WsMessage;
 import com.brix.campus.ws.WsMessageType;
@@ -36,29 +29,22 @@ import java.util.List;
  *
  * <p>落库时机：先 insert 拿到 id 再推送，保证刷新后历史完整（架构 7.4）。</p>
  *
- * <p><b>不可撤回 / 不可删除</b>：本类与 {@code ChatController} 均不提供删除或撤回能力，
- * 后台仅以只读接口查看，用于交易纠纷取证（K13）。</p>
+ * <p><b>不可撤回 / 不可删除</b>：本类与 {@code ChatController} 均不提供删除或撤回能力。</p>
  */
 @Service
 public class ChatServiceImpl implements ChatService {
 
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
-    /** 后台私信检索每页上限（防御性收敛，与 BaseQuery 的 @Max 一致） */
-    private static final long MAX_PAGE_SIZE = 50L;
-
     private final ChatMessageMapper chatMessageMapper;
     private final UserMapper userMapper;
-    private final OrderMapper orderMapper;
     private final WsSessionManager wsSessionManager;
 
     public ChatServiceImpl(ChatMessageMapper chatMessageMapper,
                            UserMapper userMapper,
-                           OrderMapper orderMapper,
                            WsSessionManager wsSessionManager) {
         this.chatMessageMapper = chatMessageMapper;
         this.userMapper = userMapper;
-        this.orderMapper = orderMapper;
         this.wsSessionManager = wsSessionManager;
     }
 
@@ -177,62 +163,5 @@ public class ChatServiceImpl implements ChatService {
         vo.setCreatedAt(message.getCreatedAt());
         return vo;
     }
-
-    @Override
-    public OrderChatVO orderChat(Long orderId) {
-        Order order = orderId == null ? null : orderMapper.selectById(orderId);
-        if (order == null) {
-            throw BusinessException.notFound("订单不存在");
-        }
-
-        OrderChatVO vo = new OrderChatVO();
-        vo.setOrderNo(order.getOrderNo());
-        vo.setItemTitle(order.getItemTitle());
-        vo.setBuyer(toChatUser(order.getBuyerId()));
-        vo.setSeller(toChatUser(order.getSellerId()));
-
-        // ① 先取「围绕该商品」的消息；② 该商品下没有带 item_id 的消息则退化为二人全部消息
-        List<OrderChatMessageVO> messages = chatMessageMapper.selectPairMessages(
-                order.getSellerId(), order.getBuyerId(), order.getItemId());
-        if (messages == null || messages.isEmpty()) {
-            messages = chatMessageMapper.selectPairMessages(
-                    order.getSellerId(), order.getBuyerId(), null);
-        }
-        List<OrderChatMessageVO> result = messages == null ? new ArrayList<>() : messages;
-        vo.setMessages(result);
-        vo.setTotal(result.size());
-        return vo;
-    }
-
-    @Override
-    public IPage<AdminChatVO> adminPage(AdminChatQuery query) {
-        long current = query.getCurrentPage() == null ? 1L : query.getCurrentPage();
-        long size = query.getPageSize() == null ? 10L : query.getPageSize();
-        if (size > MAX_PAGE_SIZE) {
-            size = MAX_PAGE_SIZE;
-        }
-        Page<AdminChatVO> page = new Page<>(current, size);
-        return chatMessageMapper.selectAdminPage(page, query);
-    }
-
-    /**
-     * 取用户精简信息（后台取证展示用），用户不存在返回 null。
-     *
-     * @param userId 用户 ID
-     * @return 精简用户信息或 null
-     */
-    private ChatUserVO toChatUser(Long userId) {
-        if (userId == null) {
-            return null;
-        }
-        User user = userMapper.selectById(userId);
-        if (user == null) {
-            return null;
-        }
-        ChatUserVO vo = new ChatUserVO();
-        vo.setId(user.getId());
-        vo.setNickname(user.getNickname());
-        vo.setUsername(user.getUsername());
-        return vo;
-    }
 }
+

@@ -7,6 +7,7 @@ import com.brix.campus.ai.CopyResult;
 import com.brix.campus.ai.EstimateResult;
 import com.brix.campus.ai.ItemProfile;
 import com.brix.campus.ai.LlmEstimator;
+import com.brix.campus.ai.NewPriceHint;
 import com.brix.campus.ai.RuleBasedEstimator;
 import com.brix.campus.common.BusinessException;
 import com.brix.campus.model.dto.AiCopyDTO;
@@ -59,16 +60,19 @@ public class AiEstimateServiceImpl implements AiEstimateService {
         EstimateResult result;
         String source = estimator.source();
         try {
-            result = estimator.estimate(profile);
+            // 阶段一（仅 LLM 路径）：组装定价参考数据包——用户原价 + LLM 新品价估计 + 原价折价参考
+            String pricingHints = LlmEstimator.SOURCE.equals(source) ? buildPricingHints(profile) : null;
+            // 阶段二：主估价（LLM 会再自行调成交库工具，结合数据包综合定价）
+            result = estimator.estimate(profile, pricingHints);
             if (result == null || result.getSuggestPrice() == null) {
                 throw new IllegalStateException("模型未返回有效建议价");
             }
         } catch (Exception e) {
             log.warn("AI 估价降级为本地规则：{}", e.getMessage());
-            result = ruleBasedEstimator.estimate(profile);
+            result = ruleBasedEstimator.estimate(profile, null);
             source = RuleBasedEstimator.SOURCE;
         }
-        result = AiResultSanitizer.sanitize(result);
+        result = AiResultSanitizer.sanitize(result, profile);
 
         long cost = System.currentTimeMillis() - start;
         quotaGuard.record(userId, AiSceneEnum.ESTIMATE, source,
@@ -147,6 +151,7 @@ public class AiEstimateServiceImpl implements AiEstimateService {
         ItemProfile profile = new ItemProfile();
         profile.setCategoryId(categoryId);
         profile.setCategoryName(categoryName);
+        profile.setCategoryFullName(categoryService.displayNameOf(categoryId));
         profile.setBrandModel(brandModel == null ? "" : brandModel.trim());
         profile.setConditionLevel(conditionLevel);
         profile.setPurchaseMonths(purchaseMonths);
@@ -165,5 +170,54 @@ public class AiEstimateServiceImpl implements AiEstimateService {
                 + "; model=" + profile.getBrandModel()
                 + "; condition=" + profile.getConditionLevel()
                 + "; months=" + profile.getPurchaseMonths());
+    }
+
+    /**
+     * 组装定价参考数据包（估价阶段一，仅 LLM 路径调用）。
+     *
+     * <p>① 用户填写了原价 → 直接作为最可靠锚点；② 未填原价 → 先用 LLM 知识查
+     * 新品参考价区间（失败静默跳过），计算「新品价 × 折价系数」作为第二锚点。
+     * 一次 estimate 请求内部至多 2 次 LLM 调用，额度仍按 1 次计。</p>
+     *
+     * @param profile 归一化入参
+     * @return 数据包文本；无可用锚点返回 null
+     */
+    private String buildPricingHints(ItemProfile profile) {
+        StringBuilder sb = new StringBuilder();
+        double factor = ConditionEnum.factorOf(profile.getConditionLevel());
+
+        // ① 用户原价：最可靠的锚点
+        if (profile.getOriginalPrice() != null) {
+            sb.append("- 用户填写原价：¥").append(profile.getOriginalPrice()).append("\n")
+              .append("- 原价折价参考：¥").append(profile.getOriginalPrice()).append(" × ")
+              .append(factor).append("（").append(profile.getConditionLevel())
+              .append("）≈ ¥").append(profile.getOriginalPrice()
+                      .multiply(java.math.BigDecimal.valueOf(factor))
+                      .setScale(2, java.math.RoundingMode.HALF_UP)).append("\n");
+        } else if (profile.getBrandModel() != null && !profile.getBrandModel().isBlank()) {
+            // ② 未填原价 → LLM 知识库估新品价（失败静默跳过，不阻断主流程）
+            try {
+                NewPriceHint hint = estimator.estimateNewPrice(profile);
+                if (hint != null && hint.newPriceLow() != null && hint.newPriceHigh() != null
+                        && hint.newPriceHigh().signum() > 0) {
+                    java.math.BigDecimal mid = hint.newPriceLow().add(hint.newPriceHigh())
+                            .divide(java.math.BigDecimal.valueOf(2), 2, java.math.RoundingMode.HALF_UP);
+                    sb.append("- LLM 新品价估计（AI 知识库，仅供参考）：¥").append(hint.newPriceLow())
+                      .append("~¥").append(hint.newPriceHigh())
+                      .append("（依据：").append(hint.basis()).append("）\n")
+                      .append("- 新品价折价参考：区间中值 ¥").append(mid).append(" × ")
+                      .append(factor).append(" ≈ ¥").append(mid.multiply(java.math.BigDecimal.valueOf(factor))
+                              .setScale(2, java.math.RoundingMode.HALF_UP)).append("\n");
+                }
+            } catch (Exception e) {
+                log.warn("LLM 新品价估计失败（跳过该锚点）：{}", e.getMessage());
+            }
+        }
+
+        if (sb.length() == 0) {
+            return null;
+        }
+        sb.append("- 数据优先级：同款成交记录 > 用户原价 > LLM 新品价估计；引用 LLM 新品价时注明其为知识库估计");
+        return sb.toString();
     }
 }
