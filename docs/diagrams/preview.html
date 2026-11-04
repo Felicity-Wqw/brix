@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>答辩用图 · 物归校园</title>
+  <style>
+    :root { --ink: #1c2a24; --sub: #7a8a82; --line: #e3ebe6; --bg: #fbfaf7; --green: #0e7a50; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--ink); font-family: "PingFang SC", "Microsoft YaHei", sans-serif; }
+    header { padding: 40px 56px 8px; }
+    header h1 { font-size: 26px; letter-spacing: .5px; }
+    header p { margin-top: 8px; color: var(--sub); font-size: 14px; }
+    .tips { margin: 20px 56px 8px; padding: 16px 20px; background: #fff; border: 1px solid var(--line);
+            border-radius: 12px; font-size: 13px; color: #4a5a52; line-height: 1.9; }
+    .tips b { color: var(--green); }
+    .grid { padding: 24px 56px 64px; display: grid; gap: 28px; }
+    figure { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+             box-shadow: 0 4px 18px rgba(28,42,36,.06); }
+    figure img { display: block; width: 100%; height: auto; }
+    figcaption { padding: 12px 18px; font-size: 13px; color: var(--sub);
+                 border-top: 1px solid var(--line); display: flex; justify-content: space-between; }
+    figcaption b { color: var(--ink); font-weight: 600; }
+    @media print {
+      body { background: #fff; }
+      .tips { display: none; }
+      figure { break-inside: avoid; box-shadow: none; }
+      header { padding-top: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>物归校园 · 答辩素材图（16:9）</h1>
+    <p>4 张矢量图 + 同名 PNG 位图 · 建议插入 PPT 时优先用 SVG（矢量不失真、可改色），PNG 用于快速粘贴</p>
+  </header>
+
+  <div class="tips">
+    <b>如何使用：</b>① 直接拖 <code>architecture.svg</code> 等 SVG 文件进 PowerPoint 幻灯片（Office 2016+ 支持，右键「转换为形状」可改文字颜色）；
+    ② 或使用同名 PNG（1600×900，投影清晰）；③ 答辩顺序建议：架构图 → 功能结构图 → E-R 图 → 接口总览；
+    ④ 页面本身可直接 Ctrl+P 导出 PDF 作为备用讲稿附件。
+  </div>
+
+  <div class="grid">
+    <figure>
+      <img src="architecture.svg" alt="系统架构图" />
+      <figcaption><span><b>① 系统架构图</b> · 客户端 / Spring Boot 分层 / 数据与外部服务</span><span>architecture</span></figcaption>
+    </figure>
+    <figure>
+      <img src="functions.svg" alt="功能结构图" />
+      <figcaption><span><b>② 功能结构图</b> · 6 大功能域 30+ 功能点</span><span>functions</span></figcaption>
+    </figure>
+    <figure>
+      <img src="er-diagram.svg" alt="数据库 E-R 图" />
+      <figcaption><span><b>③ 数据库 E-R 图</b> · 12 张表 · 三域泳道 · 预付款托管资金链</span><span>er-diagram</span></figcaption>
+    </figure>
+    <figure>
+      <img src="api-overview.svg" alt="接口设计总览" />
+      <figcaption><span><b>④ 接口设计总览</b> · 11 模块 42 端点 · 统一响应约定 · 交易闭环示例</span><span>api-overview</span></figcaption>
+    </figure>
+  </div>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#eef4f0"/>
+    </linearGradient>
+    <filter id="sh2" x="-6%" y="-10%" width="112%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#1c2a24" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg2)"/>
+
+  <rect x="64" y="52" width="8" height="34" rx="4" fill="#0e7a50"/>
+  <text x="88" y="78" font-size="30" font-weight="700" fill="#1c2a24">功能结构图</text>
+  <text x="88" y="104" font-size="14" fill="#7a8a82">物归校园 · 用户端 6 大功能域 / 30+ 功能点 · 前后端功能一一对应</text>
+
+  <!-- ======== 卡 1：认证与账号 ======== -->
+  <g filter="url(#sh2)"><rect x="64" y="140" width="472" height="330" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="64" y="140" width="472" height="52" rx="16" fill="#eef7f2"/>
+  <rect x="64" y="176" width="472" height="16" fill="#eef7f2"/>
+  <circle cx="92" cy="166" r="10" fill="#0e7a50"/>
+  <text x="92" y="171" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">1</text>
+  <text x="112" y="172" font-size="16" font-weight="700" fill="#0e7a50">认证与账号</text>
+  <text x="520" y="171" font-size="11.5" text-anchor="end" fill="#5f8a75">进入平台的第一道门</text>
+
+  <g font-size="12.5">
+    <rect x="88" y="212" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="236" text-anchor="middle" fill="#1c2a24">注册 / 登录（JWT）</text>
+    <rect x="300" y="212" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="236" text-anchor="middle" fill="#1c2a24">微信扫码登录（沙箱拟真）</text>
+
+    <rect x="88" y="262" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="286" text-anchor="middle" fill="#1c2a24">游客模式（仅浏览）</text>
+    <rect x="300" y="262" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="286" text-anchor="middle" fill="#1c2a24">未登录强制登录页</text>
+
+    <rect x="88" y="312" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="336" text-anchor="middle" fill="#1c2a24">资料编辑 / 头像</text>
+    <rect x="300" y="312" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="336" text-anchor="middle" fill="#1c2a24">修改密码 / 退出</text>
+  </g>
+  <text x="88" y="386" font-size="11.5" fill="#8a9a92">密码 BCrypt 加密存储 · 登录失效自动跳转并带回跳地址</text>
+  <text x="88" y="410" font-size="11.5" fill="#8a9a92">游客模式拦截：交易/发布/私信等写操作统一引导登录</text>
+  <text x="88" y="444" font-size="11.5" fill="#b25e00">演示便利：沙箱扫码后自动以演示账号登录</text>
+
+  <!-- ======== 卡 2：商品浏览与发布 ======== -->
+  <g filter="url(#sh2)"><rect x="564" y="140" width="472" height="330" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="564" y="140" width="472" height="52" rx="16" fill="#f0f6f2"/>
+  <rect x="564" y="176" width="472" height="16" fill="#f0f6f2"/>
+  <circle cx="592" cy="166" r="10" fill="#0e7a50"/>
+  <text x="592" y="171" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">2</text>
+  <text x="612" y="172" font-size="16" font-weight="700" fill="#0e7a50">商品浏览与发布</text>
+  <text x="1020" y="171" font-size="11.5" text-anchor="end" fill="#5f8a75">平台内容生产与发现</text>
+
+  <g font-size="12.5">
+    <rect x="588" y="212" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="236" text-anchor="middle" fill="#1c2a24">首页 · 图标分类选择</text>
+    <rect x="800" y="212" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="236" text-anchor="middle" fill="#1c2a24">二级胶囊 / 校区 / 价格</text>
+
+    <rect x="588" y="262" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="286" text-anchor="middle" fill="#1c2a24">搜索（URL 同步）</text>
+    <rect x="800" y="262" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="286" text-anchor="middle" fill="#1c2a24">排序：最新 / 价格 / 热度</text>
+
+    <rect x="588" y="312" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="336" text-anchor="middle" fill="#1c2a24">详情 + 同类好物推荐</text>
+    <rect x="800" y="312" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="336" text-anchor="middle" fill="#1c2a24">发布：级联分类 + 品牌标签</text>
+  </g>
+  <text x="588" y="386" font-size="11.5" fill="#8a9a92">8 大类 × 40 小类 · 图标卡 + 胶囊两级联动（Apple 风）</text>
+  <text x="588" y="410" font-size="11.5" fill="#8a9a92">发布支持 AI 估填价格 / 文案，图片 ≤ 9 张，走合规两道闸</text>
+  <text x="588" y="444" font-size="11.5" fill="#b25e00">编辑 / 上架下架 / 删除商品 · 我的商品管理</text>
+
+  <!-- ======== 卡 3：交易与支付 ======== -->
+  <g filter="url(#sh2)"><rect x="1064" y="140" width="472" height="330" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="1064" y="140" width="472" height="52" rx="16" fill="#fff3e8"/>
+  <rect x="1064" y="176" width="472" height="16" fill="#fff3e8"/>
+  <circle cx="1092" cy="166" r="10" fill="#c2410c"/>
+  <text x="1092" y="171" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">3</text>
+  <text x="1112" y="172" font-size="16" font-weight="700" fill="#c2410c">交易与支付</text>
+  <text x="1520" y="171" font-size="11.5" text-anchor="end" fill="#c07a52">核心业务闭环</text>
+
+  <g font-size="12.5">
+    <rect x="1088" y="212" width="200" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1188" y="236" text-anchor="middle" fill="#1c2a24">下单：面交时间地点</text>
+    <rect x="1300" y="212" width="212" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1406" y="236" text-anchor="middle" fill="#1c2a24">下单：邮寄收货三件套</text>
+
+    <rect x="1088" y="262" width="200" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1188" y="286" text-anchor="middle" fill="#1c2a24">微信支付沙箱</text>
+    <rect x="1300" y="262" width="212" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1406" y="286" text-anchor="middle" fill="#1c2a24">支付宝支付沙箱</text>
+
+    <rect x="1088" y="312" width="200" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1188" y="336" text-anchor="middle" fill="#1c2a24">预付款托管 → 结算</text>
+    <rect x="1300" y="312" width="212" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1406" y="336" text-anchor="middle" fill="#1c2a24">卖家发货 / 买家收货</text>
+  </g>
+  <text x="1088" y="386" font-size="11.5" fill="#8a9a92">状态机：待付款 → 待面交/待发货 → 待收货 → 完成</text>
+  <text x="1088" y="410" font-size="11.5" fill="#8a9a92">托管：付款入平台，确认收货同事务释放 settle_time</text>
+  <text x="1088" y="444" font-size="11.5" fill="#b25e00">取消规则 · 30 分钟超时自动关单 · 一单一评</text>
+
+  <!-- ======== 卡 4：互动与消息 ======== -->
+  <g filter="url(#sh2)"><rect x="64" y="500" width="472" height="300" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="64" y="500" width="472" height="52" rx="16" fill="#f0f6f2"/>
+  <rect x="64" y="536" width="472" height="16" fill="#f0f6f2"/>
+  <circle cx="92" cy="526" r="10" fill="#0e7a50"/>
+  <text x="92" y="531" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">4</text>
+  <text x="112" y="532" font-size="16" font-weight="700" fill="#0e7a50">互动与消息</text>
+  <text x="520" y="531" font-size="11.5" text-anchor="end" fill="#5f8a75">用户粘性与信任</text>
+
+  <g font-size="12.5">
+    <rect x="88" y="572" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="596" text-anchor="middle" fill="#1c2a24">商品留言 + 单层回复</text>
+    <rect x="300" y="572" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="596" text-anchor="middle" fill="#1c2a24">留言未读红点（导航）</text>
+
+    <rect x="88" y="622" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="646" text-anchor="middle" fill="#1c2a24">收藏 / 取消收藏</text>
+    <rect x="300" y="622" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="646" text-anchor="middle" fill="#1c2a24">浏览历史（去重）</text>
+
+    <rect x="88" y="672" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="188" y="696" text-anchor="middle" fill="#1c2a24">私信（WS 实时）</text>
+    <rect x="300" y="672" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="406" y="696" text-anchor="middle" fill="#1c2a24">举报商品</text>
+  </g>
+  <text x="88" y="744" font-size="11.5" fill="#8a9a92">留言/私信双未读体系：导航红点 + 60s 轮询 + 查看即已读</text>
+  <text x="88" y="768" font-size="11.5" fill="#8a9a92">私信 iMessage 风：日期分隔 · 气泡圆角 · 圆形发送键</text>
+
+  <!-- ======== 卡 5：个人中心 ======== -->
+  <g filter="url(#sh2)"><rect x="564" y="500" width="472" height="300" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="564" y="500" width="472" height="52" rx="16" fill="#f0f6f2"/>
+  <rect x="564" y="536" width="472" height="16" fill="#f0f6f2"/>
+  <circle cx="592" cy="526" r="10" fill="#0e7a50"/>
+  <text x="592" y="531" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">5</text>
+  <text x="612" y="532" font-size="16" font-weight="700" fill="#0e7a50">个人中心</text>
+  <text x="1020" y="531" font-size="11.5" text-anchor="end" fill="#5f8a75">订单与数据资产</text>
+
+  <g font-size="12.5">
+    <rect x="588" y="572" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="596" text-anchor="middle" fill="#1c2a24">我的商品（全状态）</text>
+    <rect x="800" y="572" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="596" text-anchor="middle" fill="#1c2a24">我买到的 / 我卖出的</text>
+
+    <rect x="588" y="622" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="646" text-anchor="middle" fill="#1c2a24">我的收藏夹</text>
+    <rect x="800" y="622" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="646" text-anchor="middle" fill="#1c2a24">浏览历史</text>
+
+    <rect x="588" y="672" width="200" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="688" y="696" text-anchor="middle" fill="#1c2a24">订单详情 / 操作</text>
+    <rect x="800" y="672" width="212" height="38" rx="19" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="906" y="696" text-anchor="middle" fill="#1c2a24">数据可视化分析</text>
+  </g>
+  <text x="588" y="744" font-size="11.5" fill="#8a9a92">买卖双视角订单（状态筛选 + 操作按钮按角色/状态计算）</text>
+  <text x="588" y="768" font-size="11.5" fill="#8a9a92">分析页：ECharts 消费/收入趋势、分类占比、信用分</text>
+
+  <!-- ======== 卡 6：AI 智能能力 ======== -->
+  <g filter="url(#sh2)"><rect x="1064" y="500" width="472" height="300" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="1064" y="500" width="472" height="52" rx="16" fill="#fdf7ef"/>
+  <rect x="1064" y="536" width="472" height="16" fill="#fdf7ef"/>
+  <circle cx="1092" cy="526" r="10" fill="#b25e00"/>
+  <text x="1092" y="531" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">6</text>
+  <text x="1112" y="532" font-size="16" font-weight="700" fill="#b25e00">AI 智能能力（LangChain4j）</text>
+  <text x="1520" y="531" font-size="11.5" text-anchor="end" fill="#c07a52">差异化亮点</text>
+
+  <g font-size="12.5">
+    <rect x="1088" y="572" width="200" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1188" y="596" text-anchor="middle" fill="#1c2a24">两阶段智能估价</text>
+    <rect x="1300" y="572" width="212" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1406" y="596" text-anchor="middle" fill="#1c2a24">一键生成文案</text>
+
+    <rect x="1088" y="622" width="200" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1188" y="646" text-anchor="middle" fill="#1c2a24">发布 AI 合规审核</text>
+    <rect x="1300" y="622" width="212" height="38" rx="19" fill="#fffaf4" stroke="#f3e2ce"/>
+    <text x="1406" y="646" text-anchor="middle" fill="#1c2a24">工具调用查成交库</text>
+  </g>
+  <text x="1088" y="684" font-size="11.5" fill="#8a9a92">新品价锚点 → 成交库同款样本核对 → 原价硬钳制</text>
+  <text x="1088" y="706" font-size="11.5" fill="#8a9a92">审核四选一：通过 / 驳回下架 / 修改重审 / 上报风控</text>
+  <text x="1088" y="728" font-size="11.5" fill="#8a9a92">每日额度（10 次）· 调用日志可追溯</text>
+  <text x="1088" y="756" font-size="11.5" font-weight="600" fill="#b25e00">无 Key 自动降级规则引擎 —— AI 不阻断业务</text>
+
+  <!-- 底部指标条 -->
+  <g>
+    <rect x="64" y="824" width="1472" height="44" rx="12" fill="#1c2a24"/>
+    <text x="800" y="852" text-anchor="middle" font-size="13.5" fill="#e8f0ec">
+      8 大类 40 小类分类体系  ·  42 个 REST 接口 + WebSocket  ·  12 张数据表  ·  6 大功能域 30+ 功能点  ·  3 个 AI 智能体（含规则降级）
+    </text>
+  </g>
+</svg>

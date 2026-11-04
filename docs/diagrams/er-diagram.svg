@@ -1,0 +1,253 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#eef4f0"/>
+    </linearGradient>
+    <filter id="sh3" x="-6%" y="-10%" width="112%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#1c2a24" flood-opacity="0.10"/>
+    </filter>
+    <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#7a8a82"/>
+    </marker>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg3)"/>
+
+  <rect x="56" y="40" width="8" height="34" rx="4" fill="#0e7a50"/>
+  <text x="80" y="66" font-size="30" font-weight="700" fill="#1c2a24">数据库 E-R 图</text>
+  <text x="80" y="92" font-size="14" fill="#7a8a82">MySQL 8.x · brix_campus · 12 张表 · PK 主键 / FK 外键 / UK 唯一键 · 全表逻辑删除 deleted</text>
+
+  <!-- 泳道底框 -->
+  <rect x="56" y="118" width="472" height="704" rx="18" fill="#ffffff" fill-opacity="0.5" stroke="#dce7e1" stroke-dasharray="6 5"/>
+  <rect x="552" y="118" width="472" height="704" rx="18" fill="#ffffff" fill-opacity="0.5" stroke="#dce7e1" stroke-dasharray="6 5"/>
+  <rect x="1048" y="118" width="496" height="704" rx="18" fill="#ffffff" fill-opacity="0.5" stroke="#dce7e1" stroke-dasharray="6 5"/>
+
+  <text x="80" y="146" font-size="13" font-weight="700" fill="#5f8a75">用户域（user_id）</text>
+  <text x="576" y="146" font-size="13" font-weight="700" fill="#5f8a75">商品域（item_id）</text>
+  <text x="1072" y="146" font-size="13" font-weight="700" fill="#c07a52">交易域（order_id）</text>
+
+  <!-- ================= 用户域 ================= -->
+  <!-- t_user -->
+  <g filter="url(#sh3)">
+    <rect x="80" y="160" width="424" height="216" rx="12" fill="#ffffff" stroke="#cfe7db" stroke-width="1.4"/>
+    <rect x="80" y="160" width="424" height="38" rx="12" fill="#0e7a50"/>
+    <rect x="80" y="184" width="424" height="14" fill="#0e7a50"/>
+  </g>
+  <text x="96" y="185" font-size="14.5" font-weight="700" fill="#ffffff">t_user　用户</text>
+  <text x="488" y="185" font-size="11" text-anchor="end" fill="#c9e9dc">核心主表</text>
+  <g font-size="11.5" fill="#3d4c44">
+    <text x="96" y="220"><tspan font-weight="700" fill="#b25e00">PK</tspan>  id  bigint</text>
+    <text x="300" y="220"><tspan font-weight="700" fill="#0e7a50">UK</tspan>  username</text>
+    <text x="96" y="244">password  BCrypt 密文</text>
+    <text x="300" y="244">nickname / avatar</text>
+    <text x="96" y="268">campus 校区 · school</text>
+    <text x="300" y="268">phone 手机号</text>
+    <text x="96" y="292">role  USER / REVIEWER / OPERATOR</text>
+    <text x="96" y="316">status  NORMAL / DISABLED</text>
+    <text x="300" y="316">credit_score 信用分</text>
+    <text x="96" y="340">bio 简介 · disabled_by / at</text>
+    <text x="96" y="364" fill="#8a9a92">deleted / created_at / updated_at</text>
+  </g>
+
+  <!-- t_favorite -->
+  <g filter="url(#sh3)"><rect x="80" y="396" width="200" height="126" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="80" y="396" width="200" height="32" rx="12" fill="#f0f6f2"/>
+  <rect x="80" y="414" width="200" height="14" fill="#f0f6f2"/>
+  <text x="94" y="418" font-size="12.5" font-weight="700" fill="#0e7a50">t_favorite 收藏</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="94" y="446"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="94" y="468"><tspan font-weight="700" fill="#0e7a50">FK</tspan> user_id 收藏人</text>
+    <text x="94" y="490"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id 商品</text>
+    <text x="94" y="512" fill="#8a9a92">人+商品去重</text>
+  </g>
+
+  <!-- t_browse_history -->
+  <g filter="url(#sh3)"><rect x="300" y="396" width="204" height="126" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="300" y="396" width="204" height="32" rx="12" fill="#f0f6f2"/>
+  <rect x="300" y="414" width="204" height="14" fill="#f0f6f2"/>
+  <text x="314" y="418" font-size="12.5" font-weight="700" fill="#0e7a50">t_browse_history 足迹</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="314" y="446"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="314" y="468"><tspan font-weight="700" fill="#0e7a50">FK</tspan> user_id</text>
+    <text x="314" y="490"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id</text>
+    <text x="314" y="512">browsed_at 去重·最近</text>
+  </g>
+
+  <!-- t_chat_message -->
+  <g filter="url(#sh3)"><rect x="80" y="542" width="200" height="150" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="80" y="542" width="200" height="32" rx="12" fill="#f0f6f2"/>
+  <rect x="80" y="560" width="200" height="14" fill="#f0f6f2"/>
+  <text x="94" y="564" font-size="12.5" font-weight="700" fill="#0e7a50">t_chat_message 私信</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="94" y="592"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="94" y="614"><tspan font-weight="700" fill="#0e7a50">FK</tspan> from_id 发送者</text>
+    <text x="94" y="636"><tspan font-weight="700" fill="#0e7a50">FK</tspan> to_id 接收者</text>
+    <text x="94" y="658">content ≤500字</text>
+    <text x="94" y="680">is_read 接收者已读</text>
+  </g>
+
+  <!-- t_ai_estimate_log -->
+  <g filter="url(#sh3)"><rect x="300" y="542" width="204" height="150" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="300" y="542" width="204" height="32" rx="12" fill="#fdf7ef"/>
+  <rect x="300" y="560" width="204" height="14" fill="#fdf7ef"/>
+  <text x="314" y="564" font-size="12.5" font-weight="700" fill="#b25e00">t_ai_estimate_log 调用日志</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="314" y="592"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="314" y="614"><tspan font-weight="700" fill="#0e7a50">FK</tspan> user_id</text>
+    <text x="314" y="636">scene ESTIMATE/COPY/AUDIT</text>
+    <text x="314" y="658">source LLM / RULE</text>
+    <text x="314" y="680">success · cost_ms 耗时</text>
+  </g>
+
+  <!-- 用户域关系说明 -->
+  <text x="80" y="726" font-size="11.5" fill="#7a8a82">user 1 ── N favorite / browse_history / chat_message / ai_estimate_log</text>
+  <text x="80" y="748" font-size="11.5" fill="#7a8a82">chat_message 双向：from_id / to_id 均引用 t_user（N:M）</text>
+  <text x="80" y="770" font-size="11.5" fill="#8a9a92">收藏与足迹在商品删除后按 deleted 过滤，不产生脏数据</text>
+
+  <!-- ================= 商品域 ================= -->
+  <!-- t_category -->
+  <g filter="url(#sh3)">
+    <rect x="576" y="160" width="424" height="150" rx="12" fill="#ffffff" stroke="#cfe7db" stroke-width="1.4"/>
+    <rect x="576" y="160" width="424" height="38" rx="12" fill="#0e7a50"/>
+    <rect x="576" y="184" width="424" height="14" fill="#0e7a50"/>
+  </g>
+  <text x="592" y="185" font-size="14.5" font-weight="700" fill="#ffffff">t_category　分类</text>
+  <text x="984" y="185" font-size="11" text-anchor="end" fill="#c9e9dc">两级自关联</text>
+  <g font-size="11.5" fill="#3d4c44">
+    <text x="592" y="220"><tspan font-weight="700" fill="#b25e00">PK</tspan>  id</text>
+    <text x="760" y="220">name 分类名</text>
+    <text x="592" y="244"><tspan font-weight="700" fill="#0e7a50">FK</tspan>  parent_id（0 = 一级）</text>
+    <text x="592" y="268">icon EP 图标名（首页图标卡）· sort 排序</text>
+    <text x="592" y="294" fill="#8a9a92">8 大类 × 40 小类 · deleted 逻辑删除</text>
+  </g>
+
+  <!-- t_item -->
+  <g filter="url(#sh3)">
+    <rect x="576" y="330" width="424" height="250" rx="12" fill="#ffffff" stroke="#cfe7db" stroke-width="1.6"/>
+    <rect x="576" y="330" width="424" height="38" rx="12" fill="#1c2a24"/>
+    <rect x="576" y="354" width="424" height="14" fill="#1c2a24"/>
+  </g>
+  <text x="592" y="355" font-size="14.5" font-weight="700" fill="#ffffff">t_item　商品（核心实体）</text>
+  <text x="984" y="355" font-size="11" text-anchor="end" fill="#b7c9c0">状态机 5 态</text>
+  <g font-size="11.5" fill="#3d4c44">
+    <text x="592" y="390"><tspan font-weight="700" fill="#b25e00">PK</tspan>  id</text>
+    <text x="768" y="390"><tspan font-weight="700" fill="#0e7a50">FK</tspan>  seller_id 卖家</text>
+    <text x="592" y="414"><tspan font-weight="700" fill="#0e7a50">FK</tspan>  category_id 分类</text>
+    <text x="768" y="414">title 标题 ≤40</text>
+    <text x="592" y="438">description 描述 ≤2000</text>
+    <text x="768" y="438">price 现价 / original_price</text>
+    <text x="592" y="462">condition_level 成色四级</text>
+    <text x="768" y="462">trade_type 面交/邮寄/均可</text>
+    <text x="592" y="486">status  PENDING / ON_SALE /</text>
+    <text x="592" y="506">　　　　OFF_SHELF / SOLD / REJECTED</text>
+    <text x="592" y="530">cover_image 首图</text>
+    <text x="768" y="530">brand_model 品牌型号</text>
+    <text x="592" y="554">campus 校区 · contact 联系</text>
+    <text x="592" y="574" fill="#8a9a92">deleted / created_at / updated_at</text>
+  </g>
+
+  <!-- t_item_image -->
+  <g filter="url(#sh3)"><rect x="576" y="590" width="200" height="126" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="576" y="590" width="200" height="32" rx="12" fill="#f0f6f2"/>
+  <rect x="576" y="608" width="200" height="14" fill="#f0f6f2"/>
+  <text x="590" y="612" font-size="12.5" font-weight="700" fill="#0e7a50">t_item_image 图集</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="590" y="640"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="590" y="662"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id</text>
+    <text x="590" y="684">url 图片地址</text>
+    <text x="590" y="706">sort 0 = 主图</text>
+  </g>
+
+  <!-- t_item_comment -->
+  <g filter="url(#sh3)"><rect x="796" y="590" width="204" height="150" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="796" y="590" width="204" height="32" rx="12" fill="#f0f6f2"/>
+  <rect x="796" y="608" width="204" height="14" fill="#f0f6f2"/>
+  <text x="810" y="612" font-size="12.5" font-weight="700" fill="#0e7a50">t_item_comment 留言</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="810" y="640"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="810" y="662"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id · user_id</text>
+    <text x="810" y="684">parent_id 空=一级·单层回复</text>
+    <text x="810" y="706">content ≤500字</text>
+    <text x="810" y="728">is_read 卖家已读（驱动红点）</text>
+  </g>
+
+  <!-- t_report -->
+  <g filter="url(#sh3)"><rect x="576" y="736" width="200" height="66" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="576" y="736" width="200" height="30" rx="12" fill="#f0f6f2"/>
+  <rect x="576" y="752" width="200" height="14" fill="#f0f6f2"/>
+  <text x="590" y="756" font-size="12.5" font-weight="700" fill="#0e7a50">t_report 举报</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="590" y="782"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id · user_id</text>
+    <text x="590" y="798">reason_type · status</text>
+  </g>
+
+  <!-- 商品域关系说明 -->
+  <text x="576" y="820" font-size="11.5" fill="#7a8a82">category 1 ── N item（两级分类）　　item 1 ── N image / comment / report</text>
+
+  <!-- ================= 交易域 ================= -->
+  <!-- t_order -->
+  <g filter="url(#sh3)">
+    <rect x="1072" y="200" width="448" height="248" rx="12" fill="#ffffff" stroke="#f0cdb2" stroke-width="1.6"/>
+    <rect x="1072" y="200" width="448" height="38" rx="12" fill="#c2410c"/>
+    <rect x="1072" y="224" width="448" height="14" fill="#c2410c"/>
+  </g>
+  <text x="1088" y="225" font-size="14.5" font-weight="700" fill="#ffffff">t_order　订单（快照 + 托管）</text>
+  <text x="1504" y="225" font-size="11" text-anchor="end" fill="#fbe3d2">4 个时间戳</text>
+  <g font-size="11.5" fill="#3d4c44">
+    <text x="1088" y="260"><tspan font-weight="700" fill="#b25e00">PK</tspan>  id　　<tspan font-weight="700" fill="#0e7a50">UK</tspan> order_no</text>
+    <text x="1088" y="284"><tspan font-weight="700" fill="#0e7a50">FK</tspan>  item_id · buyer_id · seller_id</text>
+    <text x="1088" y="308">amount 成交额 · item_title/cover/price 快照</text>
+    <text x="1088" y="332">trade_type MEET/SHIP　status 6 态</text>
+    <text x="1088" y="356">pay_method WECHAT/ALIPAY　pay_time</text>
+    <text x="1088" y="380">meet_time/place · receiver 三件套</text>
+    <text x="1088" y="404">ship_time · finish_time · cancel_time</text>
+    <text x="1088" y="428"><tspan font-weight="700" fill="#c2410c">settle_time 托管结算（确认收货同事务写入）</tspan></text>
+  </g>
+
+  <!-- t_review -->
+  <g filter="url(#sh3)"><rect x="1072" y="470" width="230" height="150" rx="12" fill="#ffffff" stroke="#e3ebe6" stroke-width="1.2"/></g>
+  <rect x="1072" y="470" width="230" height="32" rx="12" fill="#fff3e8"/>
+  <rect x="1072" y="488" width="230" height="14" fill="#fff3e8"/>
+  <text x="1086" y="492" font-size="12.5" font-weight="700" fill="#b25e00">t_review 评价</text>
+  <g font-size="11" fill="#3d4c44">
+    <text x="1086" y="520"><tspan font-weight="700" fill="#b25e00">PK</tspan> id</text>
+    <text x="1086" y="542"><tspan font-weight="700" fill="#0e7a50">FK</tspan> order_id（<tspan font-weight="700" fill="#0e7a50">UK</tspan> 一单一条）</text>
+    <text x="1086" y="564"><tspan font-weight="700" fill="#0e7a50">FK</tspan> item_id · buyer_id · seller_id</text>
+    <text x="1086" y="586">rating 1–5 星 · content ≤500</text>
+    <text x="1086" y="608">images 评价图片（≤3 张）</text>
+  </g>
+
+  <!-- 交易域关系说明 -->
+  <text x="1072" y="660" font-size="11.5" fill="#7a8a82">order 1 ── 1 review（order_id 唯一）</text>
+  <text x="1072" y="684" font-size="11.5" fill="#7a8a82">item → order 携带快照，商品改价/删除不影响历史订单</text>
+
+  <!-- 跨域关系箭头 -->
+  <g stroke="#7a8a82" stroke-width="1.6" fill="none" marker-end="url(#ar3)">
+    <path d="M504,400 L572,400" stroke-dasharray="5 4"/>
+    <path d="M1000,450 L1066,330" stroke-dasharray="5 4"/>
+    <path d="M504,300 C520,340 540,380 566,420" stroke-dasharray="5 4"/>
+  </g>
+  <g font-size="10.5" fill="#7a8a82">
+    <text x="508" y="392">1:N</text>
+    <text x="1012" y="318">1:1</text>
+    <text x="512" y="300">1:N</text>
+  </g>
+
+  <!-- 托管结算说明 -->
+  <g filter="url(#sh3)"><rect x="1072" y="712" width="448" height="110" rx="12" fill="#fffaf4" stroke="#f0cdb2" stroke-width="1.2"/></g>
+  <text x="1088" y="736" font-size="12.5" font-weight="700" fill="#c2410c">预付款托管模型（资金链路）</text>
+  <g font-size="11" fill="#8a6a45">
+    <text x="1088" y="758">① pay 支付 → 预付款进入平台托管（escrowDesc「托管中」）</text>
+    <text x="1088" y="777">② confirm 确认收货 → 同一事务写 settle_time → 款结算给卖家</text>
+    <text x="1088" y="796">③ cancel 取消 → 商品回滚在售；待付款单 30 分钟超时自动关闭</text>
+    <text x="1088" y="815" fill="#b25e00">④ 兜底：AI 估价结果与成交价的合理性校验（原价钳制）</text>
+  </g>
+
+  <!-- 图例 -->
+  <g>
+    <rect x="56" y="846" width="884" height="40" rx="10" fill="#1c2a24"/>
+    <text x="76" y="871" font-size="11.5" fill="#d6e6de">
+      <tspan font-weight="700" fill="#f0c090">PK</tspan> 主键　　<tspan font-weight="700" fill="#8fd8b4">FK</tspan> 外键　　<tspan font-weight="700" fill="#8fd8b4">UK</tspan> 唯一键　　<tspan fill="#a8bcb2">虚线 = 跨域关系</tspan>　　全表含 deleted 逻辑删除 / created_at / updated_at
+    </text>
+  </g>
+</svg>

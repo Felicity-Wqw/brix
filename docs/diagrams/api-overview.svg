@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfaf7"/>
+      <stop offset="1" stop-color="#eef4f0"/>
+    </linearGradient>
+    <filter id="sh4" x="-6%" y="-10%" width="112%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#1c2a24" flood-opacity="0.08"/>
+    </filter>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg4)"/>
+
+  <rect x="56" y="40" width="8" height="34" rx="4" fill="#0e7a50"/>
+  <text x="80" y="66" font-size="30" font-weight="700" fill="#1c2a24">接口设计总览</text>
+  <text x="80" y="92" font-size="14" fill="#7a8a82">RESTful · 11 个模块 / 42 个端点 · WebSocket 1 条长连接 · 统一响应体 R{code,msg,data,timestamp}</text>
+
+  <!-- ============ 左：模块卡网格 ============ -->
+  <g filter="url(#sh4)"><rect x="56" y="118" width="908" height="704" rx="18" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="56" y="118" width="908" height="46" rx="18" fill="#f0f6f2"/>
+  <rect x="56" y="146" width="908" height="18" fill="#f0f6f2"/>
+  <text x="80" y="147" font-size="14.5" font-weight="700" fill="#0e7a50">接口模块与端点分布</text>
+  <text x="940" y="147" font-size="11" text-anchor="end" fill="#5f8a75">★ = 核心业务接口（答辩重点）</text>
+
+  <!-- 行 1 -->
+  <g filter="url(#sh4)"><rect x="80" y="180" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="106" cy="204" r="12" fill="#0e7a50"/><text x="106" y="209" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">A</text>
+  <text x="128" y="209" font-size="13.5" font-weight="700" fill="#1c2a24">认证 /auth</text>
+  <text x="484" y="209" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">3</text>
+  <text x="128" y="232" font-size="11" fill="#4a5a52">POST register · POST login · GET me</text>
+  <text x="128" y="252" font-size="10.5" fill="#8a9a92">公开 2 · 登录 1 · JWT + BCrypt</text>
+
+  <g filter="url(#sh4)"><rect x="520" y="180" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="546" cy="204" r="12" fill="#0e7a50"/><text x="546" y="209" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">U</text>
+  <text x="568" y="209" font-size="13.5" font-weight="700" fill="#1c2a24">用户 /users</text>
+  <text x="924" y="209" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">6</text>
+  <text x="568" y="232" font-size="11" fill="#4a5a52">PUT me · PUT me/password · POST me/avatar</text>
+  <text x="568" y="252" font-size="10.5" fill="#8a9a92">GET me/analysis · me/browse-history · {id}/reviews</text>
+
+  <!-- 行 2 -->
+  <g filter="url(#sh4)"><rect x="80" y="276" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="106" cy="300" r="12" fill="#0e7a50"/><text x="106" y="305" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">I</text>
+  <text x="128" y="305" font-size="13.5" font-weight="700" fill="#1c2a24">商品 /items　★</text>
+  <text x="484" y="305" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">8</text>
+  <text x="128" y="328" font-size="11" fill="#4a5a52">{id}/favorite · POST / PUT / DELETE {id} · PATCH status</text>
+  <text x="128" y="348" font-size="10.5" fill="#8a9a92">GET 列表/详情/similar/mine · 公开读 + 登录写</text>
+
+  <g filter="url(#sh4)"><rect x="520" y="276" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="546" cy="300" r="12" fill="#0e7a50"/><text x="546" y="305" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">O</text>
+  <text x="568" y="305" font-size="13.5" font-weight="700" fill="#1c2a24">订单 /orders　★</text>
+  <text x="924" y="305" font-size="12" text-anchor="end" fill="#c2410c" font-weight="700">9</text>
+  <text x="568" y="328" font-size="11" fill="#4a5a52">POST 下单 · pay · ship · confirm · cancel · review</text>
+  <text x="568" y="348" font-size="10.5" fill="#8a9a92">GET {id} · bought · sold · 托管结算全链路</text>
+
+  <!-- 行 3 -->
+  <g filter="url(#sh4)"><rect x="80" y="372" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="106" cy="396" r="12" fill="#0e7a50"/><text x="106" y="401" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">C</text>
+  <text x="128" y="401" font-size="13.5" font-weight="700" fill="#1c2a24">留言 /comments · /items/{id}/comments</text>
+  <text x="484" y="401" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">4</text>
+  <text x="128" y="424" font-size="11" fill="#4a5a52">GET 列表（卖家查看即已读）· POST 留言/回复</text>
+  <text x="128" y="444" font-size="10.5" fill="#8a9a92">GET unread-summary 未读摘要（导航红点）· DELETE {id}</text>
+
+  <g filter="url(#sh4)"><rect x="520" y="372" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="546" cy="396" r="12" fill="#0e7a50"/><text x="546" y="401" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">M</text>
+  <text x="568" y="401" font-size="13.5" font-weight="700" fill="#1c2a24">私信 /chat + WebSocket</text>
+  <text x="924" y="401" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">5+1</text>
+  <text x="568" y="424" font-size="11" fill="#4a5a52">POST messages · GET conversations / messages</text>
+  <text x="568" y="444" font-size="10.5" fill="#8a9a92">GET unread-count · PUT read · ws://.../ws 推送</text>
+
+  <!-- 行 4 -->
+  <g filter="url(#sh4)"><rect x="80" y="468" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="106" cy="492" r="12" fill="#b25e00"/><text x="106" y="497" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">AI</text>
+  <text x="128" y="497" font-size="13.5" font-weight="700" fill="#1c2a24">AI 能力 /ai　★</text>
+  <text x="484" y="497" font-size="12" text-anchor="end" fill="#b25e00" font-weight="700">2</text>
+  <text x="128" y="520" font-size="11" fill="#4a5a52">POST estimate（两阶段估价 + 托管兜底钳制）</text>
+  <text x="128" y="540" font-size="10.5" fill="#8a9a92">POST copywriting（分类三段式文案）· 每日额度 10 次</text>
+
+  <g filter="url(#sh4)"><rect x="520" y="468" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="546" cy="492" r="12" fill="#0e7a50"/><text x="546" y="497" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">F</text>
+  <text x="568" y="497" font-size="13.5" font-weight="700" fill="#1c2a24">收藏 /favorites</text>
+  <text x="924" y="497" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">2</text>
+  <text x="568" y="520" font-size="11" fill="#4a5a52">POST items/{id}/favorite（幂等切换）</text>
+  <text x="568" y="540" font-size="10.5" fill="#8a9a92">GET favorites 分页 · 已删除商品自动跳过</text>
+
+  <!-- 行 5 -->
+  <g filter="url(#sh4)"><rect x="80" y="564" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="106" cy="588" r="12" fill="#0e7a50"/><text x="106" y="593" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">G</text>
+  <text x="128" y="593" font-size="13.5" font-weight="700" fill="#1c2a24">分类 /categories</text>
+  <text x="484" y="593" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">1</text>
+  <text x="128" y="616" font-size="11" fill="#4a5a52">GET 全量（一级 + 二级，含 icon）</text>
+  <text x="128" y="636" font-size="10.5" fill="#8a9a92">公开接口 · 首页图标卡数据源</text>
+
+  <g filter="url(#sh4)"><rect x="520" y="564" width="420" height="84" rx="12" fill="#f8faf9" stroke="#dce7e1"/></g>
+  <circle cx="546" cy="588" r="12" fill="#0e7a50"/><text x="546" y="593" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">P</text>
+  <text x="568" y="593" font-size="13.5" font-weight="700" fill="#1c2a24">上传 / 举报</text>
+  <text x="924" y="593" font-size="12" text-anchor="end" fill="#0e7a50" font-weight="700">2</text>
+  <text x="568" y="616" font-size="11" fill="#4a5a52">POST upload/image（≤5MB，图片类型）</text>
+  <text x="568" y="636" font-size="10.5" fill="#8a9a92">POST items/{id}/reports（举报理由 + 描述）</text>
+
+  <!-- 汇总条 -->
+  <g>
+    <rect x="80" y="668" width="860" height="60" rx="12" fill="#1c2a24"/>
+    <text x="104" y="694" font-size="12.5" fill="#d6e6de">公开接口 6 个（登录/注册/分类/商品读/留言读/评价读） · 登录接口 36 个</text>
+    <text x="104" y="716" font-size="12.5" fill="#d6e6de">全部经 Vite 代理 <tspan font-weight="700" fill="#8fd8b4">/api</tspan> 前缀访问 · 图片静态通道 <tspan font-weight="700" fill="#8fd8b4">/uploads/**</tspan> 不剥前缀</text>
+  </g>
+  <text x="80" y="758" font-size="11.5" fill="#8a9a92">权限模型：@Valid 参数校验 → SecurityUtils 取当前用户 → Service 层判归属（卖家/买家）→ 403 兜底</text>
+  <text x="80" y="780" font-size="11.5" fill="#8a9a92">分页：入参 currentPage / pageSize，出参 IPage{records,total,size,current,pages}</text>
+  <text x="80" y="802" font-size="11.5" fill="#8a9a92">金额：BigDecimal 两位小数；所有 Long 序列化为字符串防 JS 精度丢失</text>
+
+  <!-- ============ 右：约定与示例 ============ -->
+  <g filter="url(#sh4)"><rect x="988" y="118" width="556" height="336" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="988" y="118" width="556" height="46" rx="16" fill="#f0f6f2"/>
+  <rect x="988" y="146" width="556" height="18" fill="#f0f6f2"/>
+  <text x="1012" y="147" font-size="14.5" font-weight="700" fill="#0e7a50">统一响应约定</text>
+
+  <g font-size="11.5" fill="#4a5a52">
+    <text x="1012" y="190" font-weight="700" fill="#1c2a24">成功响应</text>
+    <rect x="1012" y="200" width="508" height="76" rx="8" fill="#f6f9f7" stroke="#dce7e1"/>
+    <text x="1026" y="222" font-family="Consolas,monospace" font-size="11.5" fill="#0e7a50">{</text>
+    <text x="1040" y="242" font-family="Consolas,monospace" font-size="11.5" fill="#3d4c44">"code": 200, "msg": "成功",</text>
+    <text x="1040" y="262" font-family="Consolas,monospace" font-size="11.5" fill="#3d4c44">"data": { ... }, "timestamp": 1730620800000</text>
+    <text x="1026" y="272" font-family="Consolas,monospace" font-size="11.5" fill="#0e7a50">}</text>
+
+    <text x="1012" y="306" font-weight="700" fill="#1c2a24">状态码（业务失败 HTTP 仍 200）</text>
+    <rect x="1012" y="316" width="120" height="26" rx="6" fill="#eef7f2"/><text x="1072" y="333" text-anchor="middle" font-size="11" fill="#0e7a50">200 成功</text>
+    <rect x="1140" y="316" width="120" height="26" rx="6" fill="#fff3e8"/><text x="1200" y="333" text-anchor="middle" font-size="11" fill="#b25e00">400 参数/业务</text>
+    <rect x="1268" y="316" width="120" height="26" rx="6" fill="#fdecea"/><text x="1328" y="333" text-anchor="middle" font-size="11" fill="#b91c1c">401 未认证</text>
+    <rect x="1396" y="316" width="120" height="26" rx="6" fill="#fdecea"/><text x="1456" y="333" text-anchor="middle" font-size="11" fill="#b91c1c">403 无权限</text>
+
+    <text x="1012" y="372" font-weight="700" fill="#1c2a24">鉴权</text>
+    <text x="1012" y="392">请求头 Authorization: Bearer &lt;token&gt;（登录/注册返回 JWT）</text>
+    <text x="1012" y="414">401 时前端 axios 拦截器统一跳登录页并携带 redirect 回跳地址</text>
+    <text x="1012" y="436">「游客模式」仅放行商品读接口，写操作引导登录</text>
+  </g>
+
+  <!-- 核心接口示例 -->
+  <g filter="url(#sh4)"><rect x="988" y="470" width="556" height="352" rx="16" fill="#ffffff" stroke="#e3ebe6"/></g>
+  <rect x="988" y="470" width="556" height="46" rx="16" fill="#fff3e8"/>
+  <rect x="988" y="498" width="556" height="18" fill="#fff3e8"/>
+  <text x="1012" y="499" font-size="14.5" font-weight="700" fill="#b25e00">核心接口示例（交易闭环）</text>
+
+  <!-- 下单 -->
+  <rect x="1012" y="532" width="508" height="76" rx="8" fill="#fafcfb" stroke="#dce7e1"/>
+  <text x="1026" y="553" font-size="12" font-weight="700" fill="#1c2a24">① POST /orders　下单</text>
+  <text x="1026" y="573" font-family="Consolas,monospace" font-size="10.5" fill="#3d4c44">itemId, tradeType, meetTime?, meetPlace?,</text>
+  <text x="1026" y="590" font-family="Consolas,monospace" font-size="10.5" fill="#3d4c44">receiverName?, receiverPhone?, receiverAddress?</text>
+  <text x="1026" y="604" font-size="10" fill="#8a9a92">面交必填时间+地点 · 邮寄必填收货三件套</text>
+
+  <!-- 支付 -->
+  <rect x="1012" y="616" width="508" height="66" rx="8" fill="#fafcfb" stroke="#dce7e1"/>
+  <text x="1026" y="637" font-size="12" font-weight="700" fill="#1c2a24">② POST /orders/{id}/pay　预付款托管</text>
+  <text x="1026" y="657" font-family="Consolas,monospace" font-size="10.5" fill="#3d4c44">payMethod: "WECHAT" | "ALIPAY" → escrowDesc="预付款托管中"</text>
+  <text x="1026" y="674" font-size="10" fill="#8a9a92">同事务：商品 CAS 抢占（防超卖）+ 关闭同品其它待付款单</text>
+
+  <!-- 确认收货 -->
+  <rect x="1012" y="690" width="508" height="56" rx="8" fill="#fafcfb" stroke="#dce7e1"/>
+  <text x="1026" y="711" font-size="12" font-weight="700" fill="#1c2a24">③ POST /orders/{id}/confirm　确认收货</text>
+  <text x="1026" y="731" font-family="Consolas,monospace" font-size="10.5" fill="#c2410c">→ DONE + settle_time 写入（托管同事务释放给卖家）</text>
+
+  <!-- 估价 -->
+  <rect x="1012" y="754" width="508" height="52" rx="8" fill="#fafcfb" stroke="#dce7e1"/>
+  <text x="1026" y="775" font-size="12" font-weight="700" fill="#1c2a24">POST /ai/estimate　两阶段估价</text>
+  <text x="1026" y="795" font-family="Consolas,monospace" font-size="10.5" fill="#3d4c44">→ suggestPrice / priceRange / confidence / reasons / source</text>
+</svg>
