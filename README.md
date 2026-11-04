@@ -30,7 +30,7 @@ brix-campus-market/
 ├── frontend/              # Vue3 + TypeScript + Vite + Element Plus + ECharts
 │   └── src/{api,components,layout,router,stores,styles,utils,views}
 ├── db/                    # schema.sql / data.sql / seed-transactions.sql / init-db.bat
-├── docs/                  # STARTUP.md（启动指南）、PRD.md、ARCHITECTURE.md（文首有「变更说明」，以代码为准）
+├── docs/                  # STARTUP.md（启动指南）、DESIGN.md（架构/功能结构/E-R/流程图）、API.md（接口文档）、PRD.md、ARCHITECTURE.md
 ├── start-backend.bat      # 读取根目录 .env.bat 环境变量后启动后端
 └── start-frontend.bat
 ```
@@ -48,6 +48,10 @@ brix-campus-market/
 > 📖 **完整启动指南见 [docs/STARTUP.md](docs/STARTUP.md)**——含数据库初始化细节、
 > 环境变量说明、AI Key 配置、演示账号、常见问题 FAQ。Windows 下三步：`db\init-db.bat`
 > → `start-backend.bat` → `start-frontend.bat`，然后访问 http://localhost:5173 。
+>
+> 📐 **设计文档见 [docs/DESIGN.md](docs/DESIGN.md)**（架构图 / 功能结构图 / 数据库 E-R 图 /
+> 订单状态机 / 两阶段估价时序，均为 Mermaid 可直接渲染）、**[docs/API.md](docs/API.md)**
+> （全部 40+ 接口文档：路径 / 权限 / 入参 / 出参 / 错误约定）。
 
 ## 1. 初始化数据库（双击 `db/init-db.bat`）
 
