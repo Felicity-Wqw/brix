@@ -16,7 +16,7 @@
     <div class="ai-panel__form">
       <el-input v-model="brandModel" placeholder="品牌型号，如 iPad 9 64G" class="ai-panel__input" />
       <el-input-number v-model="profile.purchaseMonths" :min="0" :max="240" :controls="false" placeholder="购入月数" class="ai-panel__number" />
-      <el-input-number v-model="originalPrice" :min="0" :precision="2" :controls="false" placeholder="原价（与左侧表单同步）" class="ai-panel__number" />
+      <el-input-number v-model="originalPrice" :min="0" :precision="2" :controls="false" placeholder="原价" class="ai-panel__number" title="与左侧发布表单的原价同步" />
       <el-button type="primary" :loading="estimating" @click="doEstimate">AI 帮我定价</el-button>
       <el-button :loading="writing" @click="doCopywriting">生成文案</el-button>
     </div>
@@ -97,7 +97,7 @@ const brandModel = defineModel('brandModel', { type: String, default: '' })
 const originalPrice = defineModel('originalPrice', { type: Number, default: null })
 
 const profile = reactive({
-  purchaseMonths: 12
+  purchaseMonths: null
 })
 
 const estimating = ref(false)
@@ -211,7 +211,11 @@ async function doCopywriting() {
 }
 
 .ai-panel__number {
-  width: 130px;
+  width: 150px;
+}
+
+.ai-panel__form :deep(.el-input__inner) {
+  text-overflow: ellipsis;
 }
 
 .ai-panel__result,

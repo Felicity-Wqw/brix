@@ -271,6 +271,7 @@ brix-campus-market/
 | reports | `t_report` | `Report` | `ReportMapper` |
 | chat_messages | `t_chat_message` | `ChatMessage` | `ChatMessageMapper` |
 | ai_estimate_logs | `t_ai_estimate_log` | `AiEstimateLog` | `AiEstimateLogMapper` |
+| item_audit_logs（P2） | `t_item_audit_log` | `ItemAuditLog` | `ItemAuditLogMapper` |
 
 通用约定：主键 `id BIGINT UNSIGNED AUTO_INCREMENT`；审计 `created_at`/`updated_at`（`DATETIME`，由 `MetaObjectHandler` 填充）；逻辑删除 `deleted TINYINT NOT NULL DEFAULT 0`；枚举全部 `VARCHAR` 存业务码（不用 tinyint）。完整 DDL 见**附录 A**。
 
@@ -456,7 +457,37 @@ brix-campus-market/
 
 索引：`KEY idx_user_date(user_id,biz_date)`（J04 命中）、`KEY idx_date(biz_date)`。
 
-### 3.13 并发：为什么用「条件更新影响行数」而不是 `SELECT ... FOR UPDATE`
+### 3.13 `t_item_audit_log` 商品审核日志表（P2）
+
+applied by `db/p2-audit-log.sql`。**append-only，不继承 `BaseEntity`**（不带 `updated_at` / `deleted`，
+因为这行记录发生过就不许再改、不许再删）。
+
+| 字段 | 类型 | 可空 | 默认 | 说明 |
+| --- | --- | --- | --- | --- |
+| id / item_id / seller_id | BIGINT UNSIGNED | 否 | - | 主键 / 商品 / 卖家 |
+| item_title / item_price / item_cover / category_name | - | 是 | NULL | **商品快照**（审核当时的样子） |
+| seller_username / seller_nickname / seller_school / seller_campus / seller_credit | - | 是 | NULL | **卖家快照**（审核当时的样子） |
+| gate1_result | VARCHAR(20) | 否 | 'PASS' | `PASS` / `MILD_HIT` / `BLACK_HIT` |
+| gate1_word / gate1_category | VARCHAR(50) | 是 | NULL | 命中的词及其类目 |
+| gate2_result | VARCHAR(20) | 是 | NULL | `PASS` / `UNCERTAIN` / `BAN` / `UNAVAILABLE` |
+| gate2_verdict / gate2_reason | VARCHAR(20) / VARCHAR(500) | 是 | NULL | AI 原始判定值 / 理由 |
+| risk_level | VARCHAR(10) | 否 | - | `LOW` / `MEDIUM` / `HIGH` |
+| decision_status | VARCHAR(20) | 否 | - | 本次审核后落入的状态：`ON_SALE`/`PENDING`/`REJECTED` |
+| decision_note | VARCHAR(500) | 是 | NULL | 给卖家看的判定说明 |
+| handler_id / handled_at / handle_note | - | 是 | NULL | 人工处置回写（人工复核时不新增行，只补这三列） |
+| created_at | DATETIME | 否 | CURRENT_TIMESTAMP | 审核时间 |
+
+索引：`KEY idx_log_item(item_id,created_at)`、`idx_log_seller(seller_id,created_at)`、
+`idx_log_risk(risk_level,created_at)`、`idx_log_gate1(gate1_result,created_at)`。
+
+**为什么落快照而不是外键关联**：商品被卖家改标题改图片后 `t_item` 只剩最新值，卖家改昵称换校区后
+`t_user` 也一样。审核留痕要回答的是「*当时*审的是什么内容、由什么人发布」，必须抄一份存下来。
+副作用是好的——列表页零 join，商品被删除后审核记录依然完整可查。
+
+**与 `t_item` 的分工**：`t_item` 存**当前结果**（前台后台读它），`t_item_audit_log` 存**过程证据**
+（只增不改，后台「审核日志」页读它）。
+
+### 3.14 并发：为什么用「条件更新影响行数」而不是 `SELECT ... FOR UPDATE`
 
 支付抢占（E02/E10）用一条原子 UPDATE：
 

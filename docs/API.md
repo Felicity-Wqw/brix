@@ -124,6 +124,98 @@
 | --- | --- | --- | --- |
 | POST | `/upload/image` | 登录 | 图片上传。`multipart/form-data: file, biz` → `{url}`（存 `backend/uploads/{biz}/`，经 `/uploads/**` 静态访问）。限图片类型与 5MB |
 
+## 11. 管理后台（/admin）
+
+### 11.1 角色与权限矩阵
+
+两个后台角色，按最小权限拆分，**交叉访问一律 403**（由 `SecurityConfig` 的 URL 规则强制，
+Service 层不重复判断角色）：
+
+| 能力 | REVIEWER 审核员 | OPERATOR 运营 |
+| --- | :---: | :---: |
+| 商品审核队列 / 处置 | ✅ | ❌ |
+| 审核日志查询 | ✅ | ❌ |
+| 举报处理 | ✅ | ❌ |
+| 数据看板 | ❌ | ✅ |
+| 用户管理（封禁/解封） | ❌ | ✅ |
+| 订单查询（只读） | ❌ | ✅ |
+| 待办角标 `/admin/badges` | ✅ | ✅ |
+
+`USER` 角色调用 `/admin/login` 会被拒（`{code:400, msg:"无后台权限"}`）。
+
+### 11.2 接口
+
+| 方法 | 路径 | 权限 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/admin/login` | 公开 | 后台登录。入参同 `/auth/login`，返回 `LoginVO`；服务端二次校验角色 |
+| GET | `/admin/badges` | 后台 | `{pendingItems, pendingReports}`，侧栏角标 |
+| GET | `/admin/dashboard/overview?days=7` | OPERATOR | 看板全量：`overview`（用户/商品/订单/GMV/环比/审核覆盖率）、`trend`（按天补零）、`categories`、`schools`（各学校交易量）、`funnel`（发布→浏览→下单→成交）、`riskDistribution` |
+| GET | `/admin/items` | REVIEWER | 审核队列。参数 `status`、`riskLevel`、`keyword`、`categoryId`、`schoolId`、`riskFirst`（高风险置顶）、分页 → `IPage<ItemVO>` |
+| GET | `/admin/items/{id}` | REVIEWER | 审核详情（`ItemDetailVO`），**不计浏览量** |
+| POST | `/admin/items/{id}/audit` | REVIEWER | 处置。`{action: PASS\|REJECT\|OFFLINE, reason?}`：PASS→在售（可纠正误杀）、REJECT→驳回（必填原因）、OFFLINE→强制下架。处置结果会回写到该商品**最近一条审核日志**的 `handler_id / handled_at / handle_note` |
+| GET | `/admin/audit-logs` | REVIEWER | 审核日志分页。参数 `itemId`、`sellerId`、`riskLevel`、`gate1Result`、`gate2Result`、`keyword`（标题/卖家/命中词）、`handled`（true=已人工处置，false=待人工确认）、`startDate`、`endDate` → `IPage<ItemAuditLogVO>` |
+| GET | `/admin/audit-logs/by-item/{itemId}` | REVIEWER | 某件商品的完整审核轨迹（时间倒序），后台详情页的「审核证据链」用它 |
+| GET | `/admin/reports` | REVIEWER | 举报队列。参数 `status`、`reason`、分页 → `IPage<ReportVO>` |
+| POST | `/admin/reports/{id}/handle` | REVIEWER | 处理举报。`{action: OFFLINE\|REJECT, remark?}`：成立即下架商品，不成立仅关闭举报 |
+| GET | `/admin/users` | OPERATOR | 用户列表。参数 `keyword`（用户名/昵称/手机号）、`role`、`status`、`schoolId` → `IPage<UserVO>` |
+| PUT | `/admin/users/{id}/status` | OPERATOR | 封禁/解封。`{status: NORMAL\|DISABLED, reason?}`；不能操作自己，不能操作任何后台账号 |
+| GET | `/admin/orders` | OPERATOR | 全平台订单（只读）。参数 `status`、`keyword`（订单号/商品标题）、`buyerId`、`sellerId` → `IPage<OrderVO>` |
+
+> **不提供**后台改订单状态的接口：订单状态只能由买卖双方的支付/发货/确认/取消动作驱动，
+> 后台介入会绕过托管结算与超时规则。
+
+### 11.3 商品审核三级分流（两道闸）
+
+发布 / 编辑商品时 `PublishAuditService.judge()` 跑两道闸，各自定级后**取更严者**，
+级别决定落库状态（而不是决定「能不能发布」）：
+
+| 闸门 | 输入 | 判定 | 级别 |
+| --- | --- | --- | --- |
+| 第一道闸：关键词（本地词表，毫秒级、零成本、断网可用） | 标题 + 描述 | 命中**黑名单**（枪支弹药、毒品、色情、赌博、证件买卖、学术作弊、假冒、站外引流）→ `BLACK_HIT` | HIGH |
+| | | 命中**轻度风险词**（玩具枪/仿真枪、管制刀具、电子烟、医美针剂、绝对化用语）→ `MILD_HIT` | MEDIUM |
+| | | 命中**交易形态词**（代购、账号转让、票券、租赁押金、预付转账）→ `MILD_HIT` | MEDIUM |
+| | | 未命中 → `PASS` | LOW |
+| 第二道闸：AI 审核员（LLM，可降级） | 标题 + 描述 + 分类 | `REJECT_BAN` → `BAN` | HIGH |
+| | | `REJECT_REVISE` / `REPORT_RISK`（拿不准）→ `UNCERTAIN` | MEDIUM |
+| | | `PASS` → `PASS` | LOW |
+| | | 无 Key / 超时 / 解析失败 → `UNAVAILABLE` | 不参与定级 |
+
+分流结果：
+
+| 级别 | 落库状态 | 卖家体验 | 后台 |
+| --- | --- | --- | --- |
+| LOW 低风险（如篮球） | `ON_SALE` | 发完即可见，与改造前一致 | 留在「审核日志」备查 |
+| MEDIUM 中风险（如玩具枪、代购） | `PENDING` | 「我的商品」显示待审核 + 判定说明 | 进「待审核」队列，人工通过后上架 |
+| HIGH 高风险（黑名单 / AI 判不可上架） | `REJECTED` | 首页不可见，可见驳回原因，可申诉 | 进「高风险优先处理区」，高危置顶 |
+
+两条关键规则：
+
+- **取严**：关键词已判高危，AI 说「通过」也不能降级放行；AI 可以把关键词未命中的商品升级为高危。
+- **降级**：AI 未配置 / 超时 / 解析失败时记 `gate2=UNAVAILABLE`，只按关键词闸走——
+  AI 只能加严，不能故障阻断发布。中风险不依赖 AI 也能判出来，这是断网演示时队列仍有数据的原因。
+- 编辑命中 HIGH 时**直接拒绝保存**（不把已有商品改成驳回态，避免破坏原状态机）。
+
+### 11.4 审核日志（`t_item_audit_log`）
+
+低风险直发也要留一条完整日志——平台要能证明「这条内容我确实审过了」。
+日志 **append-only**，且落的是**快照**，不靠 join：
+
+| 分组 | 字段 |
+| --- | --- |
+| 商品快照 | `item_title`、`item_price`、`item_cover`、`category_name` |
+| 卖家快照 | `seller_username`、`seller_nickname`、`seller_school`、`seller_campus`、`seller_credit` |
+| 第一道闸 | `gate1_result`、`gate1_word`、`gate1_category` |
+| 第二道闸 | `gate2_result`、`gate2_verdict`、`gate2_reason` |
+| 结论 | `risk_level`、`decision_status`、`decision_note` |
+| 人工处置回写 | `handler_id`、`handled_at`、`handle_note` |
+| 审核时间 | `created_at` |
+
+为什么落快照而不是外键关联：商品被卖家改标题改图片后 `t_item` 只剩最新值，
+卖家改昵称换校区后 `t_user` 也一样；审核留痕要回答的是「**当时**审的是什么、由谁发布」。
+由此还带来一个收益——列表页零 join，商品被删除后审核记录依然完整可查。
+
+黑名单已定论时 **AI 仍会被调用一次**，就是为了把第二道闸的结论也写进日志，形成完整证据链。
+
 ---
 
 ## 错误处理约定

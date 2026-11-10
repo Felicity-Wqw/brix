@@ -83,7 +83,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createComment, deleteComment, fetchComments } from '@/api/comment'
+import { createComment, deleteComment, fetchCommentUnreadSummary, fetchComments } from '@/api/comment'
 import { useAuthStore } from '@/stores/auth'
 import { formatRelative, resolveImage, nicknameInitial } from '@/utils/format'
 import EmptyState from './EmptyState.vue'
@@ -116,6 +116,19 @@ async function load() {
     total.value = Number(data?.total || 0)
   } finally {
     loading.value = false
+    // 卖家查看自己商品时后端会把留言标记已读，这里同步刷新导航红点，避免再等 60 秒轮询
+    refreshUnreadBadge()
+  }
+}
+
+/** 同步导航「留言」未读数（失败不影响留言浏览） */
+async function refreshUnreadBadge() {
+  if (!auth.isLogin) return
+  try {
+    const summary = await fetchCommentUnreadSummary()
+    auth.setCommentUnread(summary?.count ?? 0)
+  } catch (error) {
+    // 静默失败，交给 NavBar 的轮询兜底
   }
 }
 

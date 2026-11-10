@@ -20,7 +20,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { fetchConversations, fetchUnreadCount } from '@/api/chat'
+import { fetchConversations, fetchUnreadCount, markRead } from '@/api/chat'
 import { useAuthStore } from '@/stores/auth'
 import ConversationList from '@/components/ConversationList.vue'
 import ChatWindow from '@/components/ChatWindow.vue'
@@ -74,8 +74,28 @@ function handleFrame(frame) {
   if (String(frame.fromUserId) !== String(peerId.value)) {
     auth.incUnread()
     ws.notifyNewMessage(frame.content)
+  } else {
+    // 当前会话正开着，消息已经看到了：同步落一次已读，避免刷新后红点"复活"
+    scheduleMarkRead()
   }
   load()
+}
+
+let readTimer = null
+
+/** 300ms 合并多次消息，避免每条消息都打一次已读接口 */
+function scheduleMarkRead() {
+  if (readTimer) return
+  readTimer = setTimeout(async () => {
+    readTimer = null
+    if (!peerId.value) return
+    try {
+      const data = await markRead(peerId.value)
+      auth.setUnread(data?.count ?? 0)
+    } catch (error) {
+      // 已读失败不打断聊天，交给下次打开会话补偿
+    }
+  }, 300)
 }
 
 onMounted(async () => {
@@ -96,6 +116,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (unsubscribe) unsubscribe()
+  if (readTimer) {
+    clearTimeout(readTimer)
+    readTimer = null
+  }
 })
 </script>
 

@@ -38,6 +38,15 @@ public class ItemVO implements Serializable {
     /** 校区 */
     private String campus;
 
+    /** 所属学校 ID（编辑回填与筛选用，历史数据可能为空） */
+    private Long schoolId;
+
+    /** 所属校区 ID（编辑回填与筛选用，历史数据可能为空） */
+    private Long campusId;
+
+    /** 学校名称（学校+校区两级展示，历史数据可能为空） */
+    private String schoolName;
+
     /** 交易方式码 */
     private String tradeType;
 
@@ -49,6 +58,18 @@ public class ItemVO implements Serializable {
 
     /** 状态文案 */
     private String statusDesc;
+
+    /** 风险级别码 LOW / MEDIUM / HIGH（历史数据可能为空） */
+    private String riskLevel;
+
+    /** 风险级别文案 */
+    private String riskLevelDesc;
+
+    /** 判定来源码 WORD / RULE / AI / MANUAL / LEGACY */
+    private String auditSource;
+
+    /** 判定说明：命中词 / AI 理由 / 人工驳回原因（卖家可见，便于修改后重发） */
+    private String auditReason;
 
     /** 浏览量 */
     private Integer viewCount;

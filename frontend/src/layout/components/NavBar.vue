@@ -2,21 +2,9 @@
   <header class="navbar">
     <div class="brix-container navbar__inner">
       <router-link to="/" class="navbar__logo">
-        <span class="navbar__logo-mark">归</span>
+        <img :src="logoIcon" alt="物归校园" class="navbar__logo-img" style="width: 36px; height: 36px; object-fit: contain;" />
         <span class="navbar__logo-text">物归校园</span>
       </router-link>
-
-      <el-input
-        v-model="keyword"
-        class="navbar__search"
-        placeholder="搜索教材、数码、生活用品…"
-        clearable
-        @keyup.enter="doSearch"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
 
       <nav class="navbar__links">
         <router-link to="/" class="navbar__link">首页</router-link>
@@ -69,8 +57,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import logoIcon from '@/assets/logo-icon.png'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { fetchUnreadCount } from '@/api/chat'
@@ -81,16 +70,6 @@ import ws from '@/utils/ws'
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
-const keyword = ref('')
-
-// 首页 URL 带 keyword 时同步到搜索框
-watch(
-  () => route.query.keyword,
-  (value) => {
-    keyword.value = typeof value === 'string' ? value : ''
-  },
-  { immediate: true }
-)
 
 onMounted(async () => {
   if (!auth.isLogin) return
@@ -102,6 +81,8 @@ onMounted(async () => {
     // 未读数失败不阻断页面
   }
   ws.connect()
+  // 全局私信提醒：不在私信页时也要即时更新红点/弹通知
+  unsubscribeWs = ws.onMessage(onWsFrame)
   // 留言未读数：立即拉取 + 60s 轮询
   await refreshCommentUnread()
   commentTimer = setInterval(refreshCommentUnread, 60000)
@@ -112,7 +93,22 @@ onBeforeUnmount(() => {
     clearInterval(commentTimer)
     commentTimer = null
   }
+  if (unsubscribeWs) {
+    unsubscribeWs()
+    unsubscribeWs = null
+  }
 })
+
+let unsubscribeWs = null
+
+/** 全局私信帧：私信页内由 Messages 精确处理，其它页面收到即红点 +1 并弹通知 */
+function onWsFrame(frame) {
+  if (!frame || frame.type !== 'CHAT') return
+  if (Number(frame.fromUserId) === Number(auth.user?.id)) return
+  if (route.path === '/messages') return
+  auth.incUnread()
+  ws.notifyNewMessage(frame.content)
+}
 
 let commentTimer = null
 
@@ -139,11 +135,6 @@ async function onClickComments() {
   } catch (error) {
     // 保持默认跳转
   }
-}
-
-/** 搜索：把关键词写进 URL query */
-function doSearch() {
-  router.push({ path: '/', query: keyword.value ? { keyword: keyword.value } : {} })
 }
 
 /** 下拉菜单命令 */
@@ -185,27 +176,17 @@ function onCommand(command) {
   flex-shrink: 0;
 }
 
-.navbar__logo-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: var(--brix-primary);
-  color: #fff;
-  font-weight: 700;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.14);
+.navbar__logo-img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .navbar__logo-text {
   font-size: 17px;
   font-weight: 700;
   letter-spacing: 1.5px;
-}
-
-.navbar__search {
-  width: 320px;
 }
 
 .navbar__links {

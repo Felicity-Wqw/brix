@@ -48,7 +48,7 @@
             </div>
             <div class="item-detail__spec">
               <dt>校区</dt>
-              <dd>{{ item.campus }}</dd>
+              <dd>{{ campusText }}</dd>
             </div>
             <div class="item-detail__spec">
               <dt>分类</dt>
@@ -66,18 +66,19 @@
             <el-button
               type="primary"
               size="large"
-              :disabled="sold"
+              :disabled="!purchasable"
               @click="wantIt"
             >
-              {{ sold ? '已售出' : '我想要' }}
+              {{ actionText }}
             </el-button>
-            <el-button size="large" :disabled="sold" @click="goChat">私信卖家</el-button>
+            <el-button size="large" :disabled="!purchasable" @click="goChat">私信卖家</el-button>
             <el-button size="large" :type="item.isFavorite ? 'warning' : 'default'" plain @click="toggleFavorite">
               {{ item.isFavorite ? '已收藏' : '收藏' }}
             </el-button>
             <el-button size="large" text type="danger" @click="reportVisible = true">举报</el-button>
           </div>
-          <p v-if="sold" class="item-detail__sold-tip">这件宝贝已经找到新主人啦，看看同类好物吧～</p>
+          <p v-if="pendingHint" class="item-detail__pending-tip">{{ pendingHint }}</p>
+          <p v-if="!purchasable" class="item-detail__sold-tip">{{ unavailableTip }}</p>
         </div>
       </div>
 
@@ -136,7 +137,13 @@
             <el-input v-model="orderForm.receiverName" maxlength="30" placeholder="收货人姓名" />
           </el-form-item>
           <el-form-item label="手机号" required>
-            <el-input v-model="orderForm.receiverPhone" maxlength="11" placeholder="11 位手机号" />
+            <el-input
+              v-model="orderForm.receiverPhone"
+              type="tel"
+              maxlength="11"
+              placeholder="11 位手机号"
+              @input="onReceiverPhoneInput"
+            />
           </el-form-item>
           <el-form-item label="收货地址" required>
             <el-input
@@ -162,7 +169,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -170,6 +177,7 @@ import { fetchItemDetail, fetchSimilarItems } from '@/api/item'
 import { toggleFavorite as toggleFavoriteApi } from '@/api/favorite'
 import { createOrder } from '@/api/order'
 import { useAuthStore } from '@/stores/auth'
+import { PHONE_MESSAGE, PHONE_PATTERN, sanitizePhone } from '@/constants'
 import { resolveImage } from '@/utils/format'
 import PriceTag from '@/components/PriceTag.vue'
 import ConditionTag from '@/components/ConditionTag.vue'
@@ -184,7 +192,8 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const itemId = String(route.params.id || '')
+/** 商品 id 跟随路由：详情页复用组件实例（点「同类好物」互跳），必须响应式跟随 params */
+const itemId = computed(() => String(route.params.id || ''))
 const item = ref(null)
 const similarItems = ref([])
 const loading = ref(false)
@@ -203,24 +212,85 @@ const orderForm = reactive({
   buyerNote: ''
 })
 
-const sold = computed(() => item.value?.status === 'SOLD')
+/** 收货手机号输入即过滤非数字（maxlength 只管长度拦不住字母） */
+function onReceiverPhoneInput(value) {
+  orderForm.receiverPhone = sanitizePhone(value)
+}
+
+/** 只有「在售」可下单；下架/待审核/驳回都要在详情页直接拦住，不能等提交后才报错 */
+const purchasable = computed(() => item.value?.status === 'ON_SALE')
+
+/** 先到先得提示：已有待支付订单时提醒买家支付顺序裁决规则 */
+const pendingHint = computed(() => {
+  const n = Number(item.value?.pendingBuyerCount || 0)
+  if (!purchasable.value || n <= 0) return ''
+  return `已有 ${n} 人下单待支付，按支付顺序先到先得，请尽快完成支付～`
+})
+
+/** 购买按钮文案：按商品状态给出明确原因 */
+const actionText = computed(() => {
+  switch (item.value?.status) {
+    case 'SOLD': return '已售出'
+    case 'OFF_SHELF': return '已下架'
+    case 'PENDING': return '待审核'
+    case 'REJECTED': return '未通过'
+    default: return '我想要'
+  }
+})
+
+/** 不可购买时的说明文案 */
+const unavailableTip = computed(() => {
+  switch (item.value?.status) {
+    case 'SOLD': return '这件宝贝已经找到新主人啦，看看同类好物吧～'
+    case 'OFF_SHELF': return '这件宝贝已下架，看看同类好物吧～'
+    case 'PENDING': return '这件宝贝正在审核中，通过后即可购买。'
+    case 'REJECTED': return '这件宝贝未通过审核，暂时无法购买。'
+    default: return ''
+  }
+})
 const images = computed(() => (item.value?.images || []).map((image) => image.url))
 const previewList = computed(() => images.value.map((url) => resolveImage(url)))
+
+/** 归属展示：有学校时用「学校 · 校区」，历史数据只有校区名称时退化展示 */
+const campusText = computed(() => {
+  const name = item.value?.schoolName
+  const campus = item.value?.campus
+  if (name && campus) return `${name} · ${campus}`
+  return campus || name || '-'
+})
 
 /** 加载详情（后端顺带浏览量 +1），并拉同类推荐 */
 async function load() {
   loading.value = true
   try {
-    item.value = await fetchItemDetail(itemId)
+    item.value = await fetchItemDetail(itemId.value)
     if (item.value?.tradeType === 'SHIP') tradeType.value = 'SHIP'
-    similarItems.value = (await fetchSimilarItems(itemId)) || []
+    similarItems.value = (await fetchSimilarItems(itemId.value)) || []
   } finally {
     loading.value = false
   }
 }
 
+/** 同页互跳（如点「同类好物」）：路由 id 变化时重置表单并重新加载新商品 */
+watch(itemId, (id, old) => {
+  if (!id || id === old) return
+  Object.assign(orderForm, {
+    meetTime: '',
+    meetPlace: '',
+    receiverName: '',
+    receiverPhone: '',
+    receiverAddress: '',
+    buyerNote: ''
+  })
+  load()
+})
+
 /** 我想要：未登录先登录（带回跳），买家选择交易方式后下单 */
 function wantIt() {
+  if (!purchasable.value) {
+    ElMessage.info(unavailableTip.value || '该商品暂不可购买')
+    return
+  }
   if (!auth.isLogin) {
     router.push({ path: '/login', query: { redirect: encodeURIComponent(route.fullPath) } })
     return
@@ -253,8 +323,12 @@ async function createOrderNow() {
       ElMessage.warning('请填写收货人姓名')
       return
     }
-    if (!/^\d{11}$/.test(orderForm.receiverPhone.trim())) {
-      ElMessage.warning('请填写 11 位收货人手机号')
+    if (!orderForm.receiverPhone.trim()) {
+      ElMessage.warning('请填写收货人手机号')
+      return
+    }
+    if (!PHONE_PATTERN.test(orderForm.receiverPhone.trim())) {
+      ElMessage.warning(PHONE_MESSAGE)
       return
     }
     if (!orderForm.receiverAddress.trim()) {
@@ -264,7 +338,7 @@ async function createOrderNow() {
   }
   ordering.value = true
   try {
-    const payload = { itemId, tradeType: tradeType.value }
+    const payload = { itemId: itemId.value, tradeType: tradeType.value }
     if (tradeType.value === 'MEET') {
       // 后端 LocalDateTime 反序列化要求 yyyy-MM-dd HH:mm:ss
       payload.meetTime = dayjs(orderForm.meetTime).format('YYYY-MM-DD HH:mm:ss')
@@ -290,7 +364,7 @@ function goChat() {
     router.push({ path: '/login', query: { redirect: encodeURIComponent(route.fullPath) } })
     return
   }
-  router.push({ path: '/messages', query: { peerId: String(item.value?.seller?.id || ''), itemId } })
+  router.push({ path: '/messages', query: { peerId: String(item.value?.seller?.id || ''), itemId: itemId.value } })
 }
 
 /** 收藏切换（未登录先登录） */
@@ -300,7 +374,7 @@ async function toggleFavorite() {
     return
   }
   try {
-    const data = await toggleFavoriteApi(itemId)
+    const data = await toggleFavoriteApi(itemId.value)
     item.value.isFavorite = !!data?.favorited
     item.value.favoriteCount = data?.favoriteCount ?? item.value.favoriteCount
     ElMessage.success(item.value.isFavorite ? '已加入收藏' : '已取消收藏')
@@ -440,6 +514,12 @@ onMounted(load)
   margin-top: 8px;
   font-size: 12px;
   color: var(--brix-price);
+}
+
+.item-detail__pending-tip {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--brix-warning, #b8860b);
 }
 
 .item-detail__aside-row {

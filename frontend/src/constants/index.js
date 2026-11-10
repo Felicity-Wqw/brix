@@ -38,8 +38,28 @@ export const DIALOG_MODE = {
 /** 金额格式（0.01 ~ 99999.99，最多两位小数） */
 export const PRICE_PATTERN = /^(?!0+(\.0{1,2})?$)\d{1,5}(\.\d{1,2})?$/
 
-/** 校区选项（与种子数据一致，不做移动端适配） */
-export const CAMPUS_OPTIONS = ['东校区', '西校区', '南校区']
+/**
+ * 手机号：空 或 11 位大陆手机号（1 开头，第二位 3-9）。
+ *
+ * <p>与后端 `ValidationPatterns.PHONE` 保持完全一致，改一处必须同步另一处；
+ * 只校验位数是不够的——00000000000 这类值会一路带进库。</p>
+ */
+export const PHONE_PATTERN = /^$|^1[3-9]\d{9}$/
+
+/** 手机号校验失败提示（与 PHONE_PATTERN 同口径） */
+export const PHONE_MESSAGE = '手机号格式不正确，应为 11 位大陆手机号'
+
+/**
+ * 过滤非数字字符（只保留 0-9，并截断到 11 位）。
+ *
+ * <p>`maxlength` 只能限制长度、拦不住字母，输入框需要配合本函数使用。</p>
+ *
+ * @param {string} value 输入框原始值
+ * @returns {string} 纯数字手机号
+ */
+export function sanitizePhone(value) {
+  return String(value ?? '').replace(/\D/g, '').slice(0, 11)
+}
 
 /** 角色字典 */
 export const ROLE_DICT = {
@@ -160,9 +180,6 @@ export const BRAND_TAGS_BY_CATEGORY = {
   '骑行/球鞋': ['捷安特', '美利达', '耐克', '阿迪达斯', '李宁'],
   鞋靴: ['耐克', '阿迪达斯', '新百伦', '李宁'],
   箱包: ['新秀丽', '小米', '90分'],
-  自行车: ['捷安特', '美利达', '凤凰', '永久'],
-  电动车: ['雅迪', '爱玛', '小牛', '九号'],
-  '滑板/平衡车': ['小米', '九号', ' Rodney'],
   '电子书/阅读器': ['Kindle', '掌阅', '文石'],
   '存储/硬盘': ['闪迪', '三星', '西数', '金士顿'],
   网络设备: ['小米', 'TP-LINK', '华硕']

@@ -56,6 +56,12 @@ public class ItemSaveDTO implements Serializable {
     @Size(max = 50, message = "校区名称过长")
     private String campus;
 
+    /** 所属学校 ID（两级联动；可空以兼容旧版客户端） */
+    private Long schoolId;
+
+    /** 所属校区 ID（两级联动；可空以兼容旧版客户端，传了则必须与 schoolId 匹配） */
+    private Long campusId;
+
     /** 交易方式：MEET / SHIP / BOTH */
     @NotBlank(message = "交易方式不能为空")
     private String tradeType;

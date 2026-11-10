@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 /**
  * 商品实体（物理表 {@code t_item}）。
@@ -36,8 +37,16 @@ public class Item extends BaseEntity {
     @TableField("condition_level")
     private String conditionLevel;
 
-    /** 校区 */
+    /** 校区（名称快照，展示与历史订单用，不因校区改名而变化） */
     private String campus;
+
+    /** 所属学校 ID（筛选与统计维度，历史数据可空） */
+    @TableField("school_id")
+    private Long schoolId;
+
+    /** 所属校区 ID（筛选与统计维度，历史数据可空） */
+    @TableField("campus_id")
+    private Long campusId;
 
     /** 交易方式：MEET / SHIP / BOTH */
     @TableField("trade_type")
@@ -48,6 +57,26 @@ public class Item extends BaseEntity {
 
     /** 状态：PENDING / ON_SALE / OFF_SHELF / SOLD / REJECTED */
     private String status;
+
+    /** 风险级别：LOW / MEDIUM / HIGH（NULL 表示改造前的历史数据，视为已放行） */
+    @TableField("risk_level")
+    private String riskLevel;
+
+    /** 判定来源：WORD / RULE / AI / MANUAL / LEGACY */
+    @TableField("audit_source")
+    private String auditSource;
+
+    /** 判定说明：命中词 / AI 理由 / 人工驳回原因 */
+    @TableField("audit_reason")
+    private String auditReason;
+
+    /** 最后一次人工审核人 ID（自动分流时为 NULL） */
+    @TableField("audit_by")
+    private Long auditBy;
+
+    /** 最后一次人工审核时间 */
+    @TableField("audit_at")
+    private LocalDateTime auditAt;
 
     /** 首图 URL（与图片 sort 最小者同步） */
     @TableField("cover_image")

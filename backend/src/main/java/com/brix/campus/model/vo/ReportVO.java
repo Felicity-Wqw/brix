@@ -58,6 +58,9 @@ public class ReportVO implements Serializable {
     /** 处理人昵称 */
     private String handlerNickname;
 
+    /** 处理备注（审核员填写的判断依据） */
+    private String handleRemark;
+
     /** 处理时间 */
     private LocalDateTime handledAt;
 

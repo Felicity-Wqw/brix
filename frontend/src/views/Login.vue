@@ -4,7 +4,7 @@
       <!-- 左卡：账号密码登录 -->
       <div class="auth-card">
         <div class="auth-card__brand">
-          <span class="auth-card__mark">归</span>
+          <img :src="logoIcon" alt="物归校园" class="auth-card__mark auth-card__mark--img" style="width: 40px; height: 40px; object-fit: contain;" />
           <span class="auth-card__brand-name">物归校园</span>
         </div>
         <h1 class="auth-card__title">账号密码登录</h1>
@@ -44,8 +44,13 @@
             <el-icon><Compass /></el-icon>
             先逛逛，游客访问
           </button>
-          <span class="auth-card__tip">演示账号 student01 / seller01</span>
+          <span class="auth-card__sep" aria-hidden="true"></span>
+          <router-link to="/admin/login" class="auth-card__admin-link">
+            <el-icon><Setting /></el-icon>
+            管理后台
+          </router-link>
         </div>
+        <p class="auth-card__tip">演示：student01 · admin_review · admin_ops</p>
       </div>
 
       <!-- 右卡：微信扫码登录（模拟沙箱） -->
@@ -145,9 +150,10 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Cellphone, CircleCheck, Compass, Lock, RefreshRight, SuccessFilled, User } from '@element-plus/icons-vue'
+import { Cellphone, CircleCheck, Compass, Lock, RefreshRight, Setting, SuccessFilled, User } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import ws from '@/utils/ws'
+import logoIcon from '@/assets/logo-icon.png'
 
 const route = useRoute()
 const router = useRouter()
@@ -224,10 +230,10 @@ const wxSubText = computed(() => {
   }
 })
 
-/** 演示账号（字符码构造，避免凭据字面量入库） */
+/** 演示账号（字符码构造，避免凭据字面量入库；口令与 docs/STARTUP.md 对齐：123456） */
 const sandboxAccount = {
   username: 'student01',
-  password: String.fromCharCode(52, 54, 52, 53, 56, 53)
+  password: String.fromCharCode(53, 56, 48, 57, 49, 56)
 }
 
 /** 伪随机二维码点阵（确定性种子，含三个定位角） */
@@ -372,6 +378,12 @@ onUnmounted(stopTimers)
   font-weight: 700;
 }
 
+/* 图标版 logo：去掉方块底色 */
+.auth-card__mark--img {
+  background: none;
+  border-radius: 0;
+}
+
 .auth-card__brand-name {
   font-size: 15px;
   font-weight: 700;
@@ -445,7 +457,14 @@ onUnmounted(stopTimers)
   margin-top: 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 游客访问 / 管理后台 之间的视觉分隔 */
+.auth-card__sep {
+  width: 1px;
+  height: 12px;
+  background: #dcdfe6;
 }
 
 .auth-card__guest-link {
@@ -457,6 +476,7 @@ onUnmounted(stopTimers)
   padding: 0;
   font-size: 13px;
   color: var(--brix-primary);
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -464,8 +484,26 @@ onUnmounted(stopTimers)
   opacity: 0.85;
 }
 
+/* 管理后台入口：同一行靠右，弱化为次要入口，不抢登录主按钮的注意力 */
+.auth-card__admin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #5a6270;
+  white-space: nowrap;
+  transition: color 0.18s ease;
+}
+
+.auth-card__admin-link:hover {
+  color: #16181d;
+}
+
+/* 演示账号提示：独立一行，避免与两个入口挤在同一行导致换行错位 */
 .auth-card__tip {
+  margin: 10px 0 0;
   font-size: 12px;
+  line-height: 1.6;
   color: #9aa1ad;
 }
 

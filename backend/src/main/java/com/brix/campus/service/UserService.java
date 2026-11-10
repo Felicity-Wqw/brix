@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.model.User;
 import com.brix.campus.model.dto.ChangePasswordDTO;
 import com.brix.campus.model.dto.UpdateProfileDTO;
+import com.brix.campus.model.dto.UserStatusDTO;
+import com.brix.campus.model.query.UserQuery;
 import com.brix.campus.model.vo.UploadVO;
 import com.brix.campus.model.vo.UserAnalysisVO;
 import com.brix.campus.model.vo.UserVO;
@@ -81,4 +83,32 @@ public interface UserService {
      * @return VO
      */
     UserVO toVO(User user);
+
+    // ========================================================================
+    // 以下为后台运营专用（权限由 SecurityConfig 的 /admin/users/** 强制）
+    // ========================================================================
+
+    /**
+     * 后台用户列表（分页，可按关键词 / 角色 / 状态 / 学校过滤）。
+     *
+     * @param query 查询条件
+     * @return 分页结果
+     */
+    IPage<UserVO> pageForAdmin(UserQuery query);
+
+    /**
+     * 封禁 / 解封用户。
+     *
+     * <p>三条硬约束，防止后台把自己锁死：</p>
+     * <ol>
+     *   <li>不能操作自己；</li>
+     *   <li>不能操作任何后台角色（运营不能封审核员，反之亦然）；</li>
+     *   <li>只能 NORMAL ↔ DISABLED 两种状态。</li>
+     * </ol>
+     *
+     * @param operatorId 操作人 ID
+     * @param userId     目标用户 ID
+     * @param dto        目标状态与原因
+     */
+    void updateStatus(Long operatorId, Long userId, UserStatusDTO dto);
 }

@@ -41,4 +41,47 @@
          LIMIT 5
     </select>
 
+    <!-- 后台审核队列分页：支持按风险级别优先排序（高风险优先处理区） -->
+    <select id="selectAdminPage" resultType="com.brix.campus.model.Item">
+        SELECT i.*
+          FROM t_item i
+         WHERE i.deleted = 0
+        <if test="q.status != null and q.status != ''">
+            AND i.status = #{q.status}
+        </if>
+        <if test="q.riskLevel != null and q.riskLevel != ''">
+            AND i.risk_level = #{q.riskLevel}
+        </if>
+        <if test="q.categoryId != null">
+            AND i.category_id = #{q.categoryId}
+        </if>
+        <if test="q.schoolId != null">
+            AND i.school_id = #{q.schoolId}
+        </if>
+        <if test="q.keyword != null and q.keyword != ''">
+            AND (i.title LIKE CONCAT('%', #{q.keyword}, '%')
+                 OR i.description LIKE CONCAT('%', #{q.keyword}, '%'))
+        </if>
+        <choose>
+            <!--
+              高风险优先：用 CASE 把级别映射成排序权重。
+              不用 ORDER BY FIELD(risk_level,'HIGH','MEDIUM','LOW')，因为 FIELD 对未匹配值（含 NULL 的
+              改造前历史数据）返回 0，升序时 0 会排在最前面，反而把必查的高危挤到后面。
+            -->
+            <when test="q.riskFirst != null and q.riskFirst == true">
+                ORDER BY CASE i.risk_level
+                             WHEN 'HIGH' THEN 1
+                             WHEN 'MEDIUM' THEN 2
+                             WHEN 'LOW' THEN 3
+                             ELSE 4
+                         END ASC,
+                         i.created_at DESC,
+                         i.id DESC
+            </when>
+            <otherwise>
+                ORDER BY i.created_at DESC, i.id DESC
+            </otherwise>
+        </choose>
+    </select>
+
 </mapper>

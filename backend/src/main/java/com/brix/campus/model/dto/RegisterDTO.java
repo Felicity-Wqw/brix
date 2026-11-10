@@ -1,5 +1,6 @@
 package com.brix.campus.model.dto;
 
+import com.brix.campus.common.validation.ValidationPatterns;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -38,7 +39,13 @@ public class RegisterDTO implements Serializable {
     @Size(max = 50, message = "校区名称过长")
     private String campus;
 
-    /** 手机号：11 位数字 */
-    @Pattern(regexp = "^$|^\\d{11}$", message = "手机号必须为 11 位数字")
+    /** 所属学校 ID（两级联动，可空） */
+    private Long schoolId;
+
+    /** 所属校区 ID（两级联动，可空） */
+    private Long campusId;
+
+    /** 手机号：空 或 11 位大陆手机号（号段 1[3-9]） */
+    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
     private String phone;
 }

@@ -123,6 +123,9 @@ public class OrderServiceImpl implements OrderService {
         order.setItemTitle(item.getTitle());
         order.setItemCover(item.getCoverImage() == null ? "" : item.getCoverImage());
         order.setItemPrice(item.getPrice());
+        // 统计快照：归属学校/校区在下单时固化，避免商品被删除或改归属后历史统计失真
+        order.setSchoolId(item.getSchoolId());
+        order.setCampusId(item.getCampusId());
         order.setTradeType(tradeType);
         order.setStatus(OrderStatusEnum.UNPAID.getCode());
         if (isMeet) {
@@ -153,6 +156,11 @@ public class OrderServiceImpl implements OrderService {
             throw BusinessException.forbidden("无权操作该订单");
         }
         if (!OrderStatusEnum.UNPAID.getCode().equals(order.getStatus())) {
+            // 被同商品其它订单抢占时，系统会关闭本单；对买家来说语义就是「商品被抢先购买」
+            if (OrderStatusEnum.CANCELED.getCode().equals(order.getStatus())
+                    && CloseReasonEnum.SYSTEM.getCode().equals(order.getCloseReason())) {
+                throw BusinessException.param("商品已被抢先购买");
+            }
             throw BusinessException.param("订单状态已变更，请刷新");
         }
 
@@ -276,7 +284,11 @@ public class OrderServiceImpl implements OrderService {
                 .eq(Order::getStatus, status)
                 .set(Order::getStatus, OrderStatusEnum.CANCELED.getCode())
                 .set(Order::getCloseReason, closeReason)
-                .set(Order::getCancelTime, LocalDateTime.now()));
+                .set(Order::getCancelTime, LocalDateTime.now())
+                // 资金链路闭环：已支付订单取消时，托管款语义上原路退回买家
+                .set(Order::getRefundTime,
+                        OrderStatusEnum.isPaid(status) && !OrderStatusEnum.UNPAID.getCode().equals(status)
+                                ? LocalDateTime.now() : null));
         if (rows == 0) {
             throw BusinessException.param("当前订单状态不可取消");
         }
@@ -311,6 +323,28 @@ public class OrderServiceImpl implements OrderService {
         }
         wrapper.orderByDesc(Order::getCreatedAt).orderByDesc(Order::getId);
         return convertPage(orderMapper.selectPage(page, wrapper), sellerId);
+    }
+
+    @Override
+    public IPage<OrderVO> pageForAdmin(OrderQuery query) {
+        Page<Order> page = new Page<>(pageOf(query), sizeOf(query));
+        var wrapper = Wrappers.<Order>lambdaQuery();
+        if (query.getStatus() != null && !query.getStatus().isBlank()) {
+            wrapper.eq(Order::getStatus, query.getStatus());
+        }
+        if (query.getBuyerId() != null) {
+            wrapper.eq(Order::getBuyerId, query.getBuyerId());
+        }
+        if (query.getSellerId() != null) {
+            wrapper.eq(Order::getSellerId, query.getSellerId());
+        }
+        if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
+            String keyword = query.getKeyword().trim();
+            wrapper.and(w -> w.like(Order::getOrderNo, keyword).or().like(Order::getItemTitle, keyword));
+        }
+        wrapper.orderByDesc(Order::getCreatedAt).orderByDesc(Order::getId);
+        // viewerId 传 null：后台视角不需要「我能不能付/发/确认」这类按钮态
+        return convertPage(orderMapper.selectPage(page, wrapper), null);
     }
 
     @Override
@@ -487,8 +521,11 @@ public class OrderServiceImpl implements OrderService {
         vo.setReceiverPhone(order.getReceiverPhone());
         vo.setReceiverAddress(order.getReceiverAddress());
         vo.setSettleTime(order.getSettleTime());
-        // 托管状态：已付款未完成 = 托管中；完成 = 已结算给卖家
-        if (order.getSettleTime() != null) {
+        vo.setRefundTime(order.getRefundTime());
+        // 托管状态：已退款 > 已结算给卖家 > 托管中
+        if (order.getRefundTime() != null) {
+            vo.setEscrowDesc("已退款");
+        } else if (order.getSettleTime() != null) {
             vo.setEscrowDesc("已结算给卖家");
         } else if (order.getPayTime() != null) {
             vo.setEscrowDesc("预付款托管中");
@@ -554,6 +591,7 @@ public class OrderServiceImpl implements OrderService {
         target.setReceiverAddress(source.getReceiverAddress());
         target.setEscrowDesc(source.getEscrowDesc());
         target.setSettleTime(source.getSettleTime());
+        target.setRefundTime(source.getRefundTime());
         target.setViewerRole(source.getViewerRole());
         target.setCanPay(source.getCanPay());
         target.setCanShip(source.getCanShip());

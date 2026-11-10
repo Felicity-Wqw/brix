@@ -47,6 +47,14 @@ public class Order extends BaseEntity {
     @TableField("item_price")
     private BigDecimal itemPrice;
 
+    /** 下单时商品所属学校（统计快照，商品后续删除或改归属也不影响历史统计） */
+    @TableField("school_id")
+    private Long schoolId;
+
+    /** 下单时商品所属校区（统计快照） */
+    @TableField("campus_id")
+    private Long campusId;
+
     /** 实际成交方式：MEET / SHIP */
     @TableField("trade_type")
     private String tradeType;
@@ -105,4 +113,8 @@ public class Order extends BaseEntity {
     /** 预付款结算给卖家的时间（确认收货即托管释放；NULL = 尚未结算） */
     @TableField("settle_time")
     private LocalDateTime settleTime;
+
+    /** 退款时间（取消已支付订单或售后退款完成时写入） */
+    @TableField("refund_time")
+    private LocalDateTime refundTime;
 }

@@ -2,6 +2,7 @@ package com.brix.campus.service;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.model.Item;
+import com.brix.campus.model.dto.ItemAuditDTO;
 import com.brix.campus.model.dto.ItemSaveDTO;
 import com.brix.campus.model.dto.ItemStatusDTO;
 import com.brix.campus.model.query.ItemQuery;
@@ -52,13 +53,17 @@ public interface ItemService {
     IPage<ItemVO> pageMine(Long sellerId, ItemQuery query);
 
     /**
-     * 编辑商品：仅本人，编辑后保持 {@code ON_SALE}；{@code SOLD} 不可编辑。
+     * 编辑商品：仅本人；{@code SOLD} 不可编辑。
+     *
+     * <p>编辑后状态由审核结论决定：低风险保持 {@code ON_SALE}，中风险回到 {@code PENDING}，
+     * 高风险直接拒绝保存（原商品不受影响）。返回体带 status，前端据此提示用户。</p>
      *
      * @param sellerId 卖家 ID
      * @param itemId   商品 ID
      * @param dto      入参
+     * @return 编辑后的商品（含最新状态与审核说明）
      */
-    void update(Long sellerId, Long itemId, ItemSaveDTO dto);
+    ItemVO update(Long sellerId, Long itemId, ItemSaveDTO dto);
 
     /**
      * 删除商品（逻辑删除）：存在进行中订单时拒绝。
@@ -102,4 +107,48 @@ public interface ItemService {
      * @return 推荐商品列表（仅 ON_SALE）
      */
     List<ItemVO> listSimilar(Long itemId, int limit);
+
+    // ========================================================================
+    // 以下为后台审核员专用（权限由 SecurityConfig 的 /admin/items/** 规则强制，
+    // Service 层不再判断角色，只判断商品状态机是否允许该动作）
+    // ========================================================================
+
+    /**
+     * 后台商品列表：全状态、全卖家，可按状态 / 风险级别 / 关键词 / 分类 / 学校过滤。
+     *
+     * @param query 查询条件
+     * @return 分页结果
+     */
+    IPage<ItemVO> pageForAdmin(ItemQuery query);
+
+    /**
+     * 后台商品详情：与前台详情同构，但<b>不计浏览量</b>（避免审核预览污染统计）。
+     *
+     * @param itemId 商品 ID
+     * @return 详情（不看上下架状态，PENDING / REJECTED 也能看）
+     */
+    ItemDetailVO detailForAdmin(Long itemId);
+
+    /**
+     * 人工审核处置。
+     *
+     * <p>合法动作与状态迁移：</p>
+     * <pre>
+     *   PASS    : PENDING / REJECTED → ON_SALE   （通过，含纠正误杀）
+     *   REJECT  : PENDING / ON_SALE  → REJECTED   （驳回，必须写原因）
+     *   OFFLINE : ON_SALE            → OFF_SHELF  （强制下架，通常来自举报）
+     * </pre>
+     *
+     * @param reviewerId 审核员 ID
+     * @param itemId     商品 ID
+     * @param dto        审核入参
+     */
+    void audit(Long reviewerId, Long itemId, ItemAuditDTO dto);
+
+    /**
+     * 待审核商品数（后台侧栏角标）。
+     *
+     * @return 待审核数量
+     */
+    long countPending();
 }

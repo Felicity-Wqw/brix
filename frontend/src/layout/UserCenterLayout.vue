@@ -55,6 +55,7 @@ const menus = [
   { path: '/my/favorites', label: '我的收藏', icon: 'Star' },
   { path: '/my/history', label: '浏览历史', icon: 'View' },
   { path: '/my/orders', label: '我的订单', icon: 'List' },
+  { path: '/my/refunds', label: '我的售后', icon: 'Service' },
   { path: '/my/analysis', label: '数据分析', icon: 'TrendCharts' },
   { path: '/my/profile', label: '个人资料', icon: 'User' }
 ]
@@ -124,7 +125,7 @@ const menus = [
 }
 
 .user-center__menu-item.is-active {
-  background: var(--brix-primary-light);
+  background: var(--brix-primary-soft);
   color: var(--brix-primary);
   font-weight: 600;
 }

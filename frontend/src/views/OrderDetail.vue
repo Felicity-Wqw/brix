@@ -113,21 +113,55 @@
         </el-button>
         <el-button v-if="order.canReview" type="primary" plain size="large" @click="reviewVisible = true">评价卖家</el-button>
         <el-tag v-else-if="order.reviewed" size="large" effect="plain">已评价</el-tag>
+        <el-tag v-if="order.refundTime" type="success" effect="plain" size="large">已退款</el-tag>
+        <el-button
+          v-if="order.status === 'DONE' && order.viewerRole === 'BUYER' && !order.refundTime"
+          type="warning" plain size="large" @click="refundDlg.visible = true"
+        >申请售后</el-button>
+        <el-button v-if="order.status === 'DONE' && order.viewerRole === 'BUYER'" link size="large" @click="router.push('/my/refunds')">查看售后进度</el-button>
       </div>
     </template>
 
     <EmptyState v-else-if="!loading" text="订单不存在或无权查看" />
 
     <RateDialog v-model="reviewVisible" :order-id="orderId" @success="load" />
+
+    <!-- 申请售后弹窗 -->
+    <el-dialog v-model="refundDlg.visible" title="申请售后" width="480px">
+      <p class="refund-dlg__hint">
+        售后有效期：确认收货后 15 天内。卖家将在 36 小时内处理，超时默认同意退款；
+        面交订单仅支持「仅退款」（线下当面退）。
+      </p>
+      <el-form label-width="72px">
+        <el-form-item label="售后类型">
+          <el-radio-group v-model="refundDlg.type">
+            <el-radio value="REFUND_ONLY">仅退款</el-radio>
+            <el-radio v-if="order.tradeType !== 'MEET'" value="RETURN_REFUND">退货退款</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="申请原因">
+          <el-input
+            v-model="refundDlg.reason"
+            type="textarea" :rows="4" maxlength="300" show-word-limit
+            placeholder="请说明问题（如：货不对板 / 功能故障 / 描述不符），可附截图提升通过率"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="refundDlg.visible = false">取消</el-button>
+        <el-button type="primary" :loading="refundDlg.loading" @click="submitRefund">提交申请</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { AlarmClock, Location, User, Wallet } from '@element-plus/icons-vue'
 import { cancelOrder, confirmOrder, fetchOrderDetail, shipOrder } from '@/api/order'
+import { applyRefund } from '@/api/refund'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime, resolveImage } from '@/utils/format'
 import PriceTag from '@/components/PriceTag.vue'
@@ -143,6 +177,30 @@ const orderId = String(route.params.id || '')
 const order = ref(null)
 const loading = ref(false)
 const reviewVisible = ref(false)
+const refundDlg = reactive({ visible: false, loading: false, type: 'REFUND_ONLY', reason: '' })
+
+/** 提交售后申请 */
+async function submitRefund() {
+  if (!refundDlg.reason.trim()) {
+    ElMessage.warning('请填写申请原因')
+    return
+  }
+  refundDlg.loading = true
+  try {
+    await applyRefund({
+      orderId: Number(orderId),
+      type: refundDlg.type,
+      reason: refundDlg.reason.trim()
+    })
+    ElMessage.success('售后申请已提交，卖家将在 36 小时内处理')
+    refundDlg.visible = false
+    router.push('/my/refunds')
+  } catch (error) {
+    /* 拦截器已提示 */
+  } finally {
+    refundDlg.loading = false
+  }
+}
 
 /** 状态提示文案 */
 const statusTip = computed(() => {
@@ -415,5 +473,15 @@ onMounted(() => {
   gap: 12px;
   margin: 20px 0 8px;
   justify-content: flex-end;
+}
+
+.refund-dlg__hint {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #8d99a8;
+  background: #f7f9fa;
+  border-radius: 8px;
+  padding: 10px 12px;
 }
 </style>

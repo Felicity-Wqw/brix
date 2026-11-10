@@ -1,5 +1,6 @@
 package com.brix.campus.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -8,11 +9,14 @@ import com.brix.campus.common.BusinessException;
 import com.brix.campus.mapper.ItemMapper;
 import com.brix.campus.mapper.OrderMapper;
 import com.brix.campus.mapper.UserMapper;
+import com.brix.campus.model.Campus;
 import com.brix.campus.model.Item;
 import com.brix.campus.model.Order;
 import com.brix.campus.model.User;
 import com.brix.campus.model.dto.ChangePasswordDTO;
 import com.brix.campus.model.dto.UpdateProfileDTO;
+import com.brix.campus.model.dto.UserStatusDTO;
+import com.brix.campus.model.query.UserQuery;
 import com.brix.campus.model.enums.ItemStatusEnum;
 import com.brix.campus.model.enums.OrderStatusEnum;
 import com.brix.campus.model.enums.RoleEnum;
@@ -22,6 +26,7 @@ import com.brix.campus.model.vo.UserAnalysisVO;
 import com.brix.campus.model.vo.UserStatsVO;
 import com.brix.campus.model.vo.UserVO;
 import com.brix.campus.service.FileStorageService;
+import com.brix.campus.service.SchoolService;
 import com.brix.campus.service.UserService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,15 +45,18 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final OrderMapper orderMapper;
     private final PasswordEncoder passwordEncoder;
     private final FileStorageService fileStorageService;
+    private final SchoolService schoolService;
 
     public UserServiceImpl(ItemMapper itemMapper,
                            OrderMapper orderMapper,
                            PasswordEncoder passwordEncoder,
-                           FileStorageService fileStorageService) {
+                           FileStorageService fileStorageService,
+                           SchoolService schoolService) {
         this.itemMapper = itemMapper;
         this.orderMapper = orderMapper;
         this.passwordEncoder = passwordEncoder;
         this.fileStorageService = fileStorageService;
+        this.schoolService = schoolService;
     }
 
     @Override
@@ -81,6 +89,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setNickname(dto.getNickname().trim());
         user.setSchool(trimToNull(dto.getSchool()));
         user.setCampus(trimToNull(dto.getCampus()));
+        // 学校/校区联动校验：campusId 必须属于 schoolId
+        if (dto.getCampusId() != null && !schoolService.campusBelongsTo(dto.getSchoolId(), dto.getCampusId())) {
+            throw BusinessException.param("所选学校与校区不匹配，请重新选择");
+        }
+        user.setSchoolId(dto.getSchoolId());
+        user.setCampusId(dto.getCampusId());
+        // 名称快照以字典为准，避免客户端传入「金鸡岭 / 金鸡岭校区」这类不统一写法
+        if (dto.getSchoolId() != null) {
+            String schoolName = schoolService.nameOf(dto.getSchoolId());
+            if (schoolName != null) {
+                user.setSchool(schoolName);
+            }
+        }
+        if (dto.getCampusId() != null) {
+            Campus campus = schoolService.getCampus(dto.getCampusId());
+            if (campus != null) {
+                user.setCampus(campus.getName());
+            }
+        }
         user.setPhone(trimToNull(dto.getPhone()));
         user.setBio(dto.getBio() == null ? "" : dto.getBio().trim());
         updateById(user);
@@ -131,6 +158,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         vo.setAvatar(user.getAvatar());
         vo.setSchool(user.getSchool());
         vo.setCampus(user.getCampus());
+        vo.setSchoolId(user.getSchoolId());
+        vo.setCampusId(user.getCampusId());
         vo.setPhone(user.getPhone());
         vo.setBio(user.getBio());
         vo.setRole(user.getRole());
@@ -150,6 +179,64 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         return vo;
     }
 
+    // ==================== 后台运营 ====================
+
+    @Override
+    public IPage<UserVO> pageForAdmin(UserQuery query) {
+        Page<User> page = new Page<>(query.getCurrentPage() == null ? 1 : query.getCurrentPage(),
+                query.getPageSize() == null ? 10 : query.getPageSize());
+        LambdaQueryWrapper<User> wrapper = Wrappers.lambdaQuery();
+        if (query.getRole() != null && !query.getRole().isBlank()) {
+            wrapper.eq(User::getRole, query.getRole());
+        }
+        if (query.getStatus() != null && !query.getStatus().isBlank()) {
+            wrapper.eq(User::getStatus, query.getStatus());
+        }
+        if (query.getSchoolId() != null) {
+            wrapper.eq(User::getSchoolId, query.getSchoolId());
+        }
+        if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
+            String keyword = query.getKeyword().trim();
+            wrapper.and(w -> w.like(User::getUsername, keyword)
+                    .or().like(User::getNickname, keyword)
+                    .or().like(User::getPhone, keyword));
+        }
+        // 后台账号置顶：运营最常查的是「有没有异常注册」，普通用户按注册时间倒序
+        wrapper.orderByAsc(User::getRole).orderByDesc(User::getCreatedAt);
+        return baseMapper.selectPage(page, wrapper).convert(this::toVO);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateStatus(Long operatorId, Long userId, UserStatusDTO dto) {
+        if (operatorId.equals(userId)) {
+            throw BusinessException.param("不能修改自己的账号状态");
+        }
+        User user = getById(userId);
+        if (user == null) {
+            throw BusinessException.param("用户不存在");
+        }
+        if (RoleEnum.isAdmin(user.getRole())) {
+            throw BusinessException.param("后台账号不受用户管理约束，请由数据库或超级管理员处理");
+        }
+        if (!UserStatusEnum.isValid(dto.getStatus())) {
+            throw BusinessException.param("目标状态不合法");
+        }
+        if (dto.getStatus().equals(user.getStatus())) {
+            throw BusinessException.param("用户已处于该状态");
+        }
+
+        user.setStatus(dto.getStatus());
+        if (UserStatusEnum.DISABLED.getCode().equals(dto.getStatus())) {
+            user.setDisabledBy(operatorId);
+            user.setDisabledAt(LocalDateTime.now());
+        } else {
+            // 解封后清空封禁痕迹，避免前端展示「曾于某时被封」
+            user.setDisabledBy(null);
+            user.setDisabledAt(null);
+        }
+        updateById(user);
+    }
     /**
      * 组装买入/卖出单一维度的分析数据。
      *

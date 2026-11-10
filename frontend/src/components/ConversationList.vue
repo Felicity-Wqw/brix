@@ -73,7 +73,12 @@ const emit = defineEmits(['select'])
 }
 
 .conversation-item.is-active {
-  background: var(--brix-primary-light);
+  background: var(--brix-primary-soft);
+  box-shadow: inset 3px 0 0 var(--brix-primary);
+}
+
+.conversation-item.is-active .conversation-item__name {
+  color: var(--brix-primary);
 }
 
 .conversation-item__main {

@@ -51,12 +51,28 @@
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="校区" prop="campus">
-          <el-radio-group v-model="form.campus">
-            <el-radio-button v-for="campus in CAMPUS_OPTIONS" :key="campus" :value="campus">
-              {{ campus }}
-            </el-radio-button>
-          </el-radio-group>
+        <el-form-item label="所在校区" prop="campusId">
+          <div class="publish__campus-row">
+            <el-select
+              v-model="form.schoolId"
+              class="publish__campus-select"
+              placeholder="选择学校"
+              filterable
+              @change="onSchoolChange"
+            >
+              <el-option v-for="s in schools" :key="s.id" :label="s.name" :value="s.id" />
+            </el-select>
+            <el-select
+              v-model="form.campusId"
+              class="publish__campus-select"
+              :placeholder="form.schoolId ? '选择校区' : '请先选择学校'"
+              :disabled="!form.schoolId"
+              @change="onCampusChange"
+            >
+              <el-option v-for="c in campusOptions" :key="c.id" :label="c.name" :value="c.id" />
+            </el-select>
+          </div>
+          <div class="publish__campus-tip">校区会展示在商品卡片上，同校买家更容易找到你</div>
         </el-form-item>
 
         <el-form-item label="交易方式" prop="tradeType">
@@ -139,9 +155,9 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createItem, fetchItemDetail, updateItem } from '@/api/item'
 import { fetchCategories } from '@/api/category'
+import { loadSchools, resolveCampusByName } from '@/api/school'
 import {
   BRAND_TAGS_BY_CATEGORY,
-  CAMPUS_OPTIONS,
   CONDITION_DICT,
   MAX_ITEM_IMAGES,
   TRADE_TYPE_DICT
@@ -158,6 +174,8 @@ const isEdit = computed(() => !!editId)
 const formRef = ref(null)
 const submitting = ref(false)
 const categories = ref([])
+/** 学校字典（含校区），学校/校区两级联动用 */
+const schools = ref([])
 /** 级联选择路径：[大类 id, 子类 id] */
 const categoryPath = ref([])
 
@@ -199,6 +217,9 @@ const form = reactive({
   price: null,
   originalPrice: null,
   conditionLevel: 'LIGHT_USE',
+  schoolId: '',
+  campusId: '',
+  /** 校区名称快照：后端 campus 必填，编辑回填与历史展示都靠它 */
   campus: '',
   tradeType: 'MEET',
   contact: '',
@@ -206,12 +227,31 @@ const form = reactive({
   images: []
 })
 
+/** 当前学校下的校区；未选学校时为空，避免跨校混选 */
+const campusOptions = computed(() => {
+  if (!form.schoolId) return []
+  const school = schools.value.find((s) => String(s.id) === String(form.schoolId))
+  return school?.campuses || []
+})
+
+/** 切换学校：清空校区，避免出现「A 校 + B 校校区」的非法组合 */
+function onSchoolChange() {
+  form.campusId = ''
+  form.campus = ''
+}
+
+/** 选中校区：同步写入名称快照 */
+function onCampusChange(campusId) {
+  const campus = campusOptions.value.find((c) => String(c.id) === String(campusId))
+  form.campus = campus ? campus.name : ''
+}
+
 const rules = {
   title: [{ required: true, message: '标题不能为空', trigger: 'blur' }],
   categoryId: [{ required: true, message: '请选择分类', trigger: 'change' }],
   price: [{ required: true, message: '价格不能为空', trigger: 'blur' }],
   conditionLevel: [{ required: true, message: '请选择成色', trigger: 'change' }],
-  campus: [{ required: true, message: '请选择校区', trigger: 'change' }],
+  campusId: [{ required: true, message: '请选择所在校区', trigger: 'change' }],
   tradeType: [{ required: true, message: '请选择交易方式', trigger: 'change' }],
   description: [{ required: true, message: '描述不能为空', trigger: 'blur' }]
 }
@@ -251,6 +291,8 @@ async function submit() {
     originalPrice: form.originalPrice,
     conditionLevel: form.conditionLevel,
     campus: form.campus,
+    schoolId: form.schoolId || null,
+    campusId: form.campusId || null,
     tradeType: form.tradeType,
     contact: form.contact.trim(),
     brandModel: form.brandModel.trim(),
@@ -263,11 +305,18 @@ async function submit() {
   submitting.value = true
   try {
     if (isEdit.value) {
-      await updateItem(editId, payload)
-      ElMessage.success('修改成功')
+      const updated = await updateItem(editId, payload)
+      // 编辑命中中风险会重新进入人工队列，必须告知用户，否则会以为「改完就上架了」
+      if (updated && updated.status === 'PENDING') {
+        ElMessage.warning('修改成功，内容需人工复核后才会重新上架')
+      } else if (updated && updated.status === 'OFF_SHELF') {
+        ElMessage.success('修改成功，商品仍保持下架状态')
+      } else {
+        ElMessage.success('修改成功')
+      }
     } else {
-      await createItem(payload)
-      ElMessage.success('发布成功')
+      const created = await createItem(payload)
+      notifyByAuditResult(created)
     }
     router.push('/my/items')
   } finally {
@@ -275,15 +324,48 @@ async function submit() {
   }
 }
 
+/**
+ * 按三级分流结果给出真实反馈。
+ *
+ * 低风险：发完即上架（改造前的体验，保持不变）；
+ * 中风险：已进人工队列，告诉用户大概要看什么；
+ * 高风险：已落库但不可见，说明驳回原因，避免用户以为「发布失败」。
+ */
+function notifyByAuditResult(item) {
+  if (!item) {
+    ElMessage.success('发布成功')
+    return
+  }
+  if (item.status === 'REJECTED') {
+    ElMessage.error({
+      message: `发布未通过审核：${item.auditReason || '内容不符合平台规则'}`,
+      duration: 6000
+    })
+    return
+  }
+  if (item.status === 'PENDING') {
+    ElMessage.warning({
+      message: `已提交，正在人工复核：${item.auditReason || '内容需审核员确认'}`,
+      duration: 6000
+    })
+    return
+  }
+  ElMessage.success('发布成功，已上架')
+}
+
 onMounted(async () => {
+  // 学校字典必须先就绪，否则默认值回填与编辑回填时校区选项是空的
+  try {
+    schools.value = (await loadSchools()) || []
+  } catch (error) {
+    schools.value = []
+  }
   try {
     categories.value = (await fetchCategories()) || []
   } catch (error) {
     categories.value = []
   }
-  if (!applyDefaultCampus()) {
-    form.campus = ''
-  }
+  applyDefaultSchool()
 
   // 编辑模式：先取详情再回填（禁止用列表行对象直接回填）
   if (isEdit.value) {
@@ -300,7 +382,13 @@ onMounted(async () => {
       form.price = Number(detail.price)
       form.originalPrice = detail.originalPrice === null ? null : Number(detail.originalPrice)
       form.conditionLevel = detail.conditionLevel
-      form.campus = detail.campus
+      form.schoolId = detail.schoolId || ''
+      form.campusId = detail.campusId || ''
+      form.campus = detail.campus || ''
+      // 历史商品只存了校区名称、没有 ID：名称全库唯一时自动补全，跨校重名交给用户手选
+      if (!form.campusId && form.campus) {
+        applyCampusByName(form.campus)
+      }
       form.tradeType = detail.tradeType
       form.contact = detail.contact || ''
       form.brandModel = detail.brandModel || ''
@@ -312,20 +400,39 @@ onMounted(async () => {
   }
 })
 
-/** 取当前登录用户校区作为默认值 */
-function applyDefaultCampus() {
-  const campus = localStorage.getItem('brix_user')
-  if (!campus) return false
+/** 用当前登录用户的学校/校区作为默认值（失败则留空由用户手选） */
+function applyDefaultSchool() {
+  let user = null
   try {
-    const user = JSON.parse(campus)
-    if (user?.campus) {
-      form.campus = user.campus
-      return true
-    }
+    user = JSON.parse(localStorage.getItem('brix_user') || 'null')
   } catch (error) {
-    // ignore
+    return false
   }
-  return false
+  if (!user) return false
+  if (user.schoolId) {
+    form.schoolId = user.schoolId
+    form.campusId = user.campusId || ''
+    const campus = campusOptions.value.find((c) => String(c.id) === String(form.campusId))
+    form.campus = campus ? campus.name : ''
+    return true
+  }
+  // 老账号没有结构化 ID，退回名称反查
+  return applyCampusByName(user.campus)
+}
+
+/**
+ * 用校区名称反查并回填学校/校区（历史数据只有名称，没有 ID）。
+ *
+ * @param name 校区名称
+ * @returns {boolean} 是否成功匹配（重名或未找到时为 false，交给用户手选）
+ */
+function applyCampusByName(name) {
+  const hit = resolveCampusByName(schools.value, name)
+  if (!hit) return false
+  form.schoolId = hit.schoolId
+  form.campusId = hit.campusId
+  form.campus = name
+  return true
 }
 </script>
 
@@ -380,6 +487,25 @@ function applyDefaultCampus() {
 .publish__ai {
   width: 520px;
   flex-shrink: 0;
+}
+
+.publish__campus-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.publish__campus-select {
+  width: 240px;
+}
+
+.publish__campus-tip {
+  width: 100%;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--brix-text-placeholder);
 }
 
 .publish__price-row {

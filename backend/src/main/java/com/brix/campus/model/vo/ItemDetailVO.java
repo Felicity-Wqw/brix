@@ -23,6 +23,9 @@ public class ItemDetailVO extends ItemVO {
     /** 图片列表（按 sort 升序） */
     private List<ItemImageVO> images;
 
+    /** 待支付订单数（先到先得提示：大于 0 表示已有人下单待支付） */
+    private Long pendingBuyerCount;
+
     /** 卖家卡片 */
     private SellerVO seller;
 

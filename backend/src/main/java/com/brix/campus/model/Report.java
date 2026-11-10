@@ -47,6 +47,10 @@ public class Report implements Serializable {
     @TableField("handler_id")
     private Long handlerId;
 
+    /** 处理备注（审核员填写的判断依据，可空） */
+    @TableField("handle_remark")
+    private String handleRemark;
+
     /** 处理时间 */
     @TableField("handled_at")
     private LocalDateTime handledAt;

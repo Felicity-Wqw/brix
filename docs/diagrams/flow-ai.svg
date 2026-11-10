@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1400" viewBox="0 0 800 700"
+     font-family="'PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif">
+  <rect width="800" height="700" fill="#ffffff"/>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#8a9a92" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect x="40" y="26" width="6" height="26" rx="3" fill="#0e7a50"/>
+  <text x="58" y="40" font-size="22" font-weight="700" fill="#1c2a24" dominant-baseline="central">AI 两阶段估价流程</text>
+  <text x="58" y="66" font-size="12.5" fill="#8a9a92" dominant-baseline="central">无原价时先用 LLM 知识补锚点，再让模型调工具查成交库，最后清洗兜底</text>
+<rect x="40" y="96" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="115.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">估价请求</text>
+  <text x="180.0" y="134.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">分类 · 型号 · 成色 · 原价?</text>
+  <rect x="440" y="96" width="320" height="56" rx="10" fill="#fdf7ef" stroke="#f2ddc0" stroke-width="0.6"/>
+  <text x="600.0" y="115.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#b25e00">未填原价 → 补第二锚点</text>
+  <text x="600.0" y="134.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#8a6a45">LLM 估新品价 × 成色折价系数</text>
+  <path d="M320 124 L435 124" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <path d="M180 152 L180 191" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="40" y="196" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="215.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">主估价</text>
+  <text x="180.0" y="234.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">数据包 + 工具调用（模型自主）</text>
+  <rect x="440" y="202" width="320" height="44" rx="10" fill="#fdecea" stroke="#f7c1c1" stroke-width="0.6"/>
+  <text x="600.0" y="224.0" text-anchor="middle" dominant-baseline="central" font-size="14" font-weight="600" fill="#b91c1c">超时 / 异常 → 规则引擎降级</text>
+  <path d="M320 224 L435 224" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <path d="M180 252 L180 291" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="40" y="296" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="315.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">工具查真实数据</text>
+  <text x="180.0" y="334.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">成交统计 · 在售最低价 · 折价系数</text>
+  <path d="M180 352 L180 391" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="40" y="396" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="415.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">同款判定</text>
+  <text x="180.0" y="434.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">样本标题 ≠ 商品则忽略该成交</text>
+  <path d="M180 452 L180 491" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="40" y="496" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="515.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">结果清洗硬钳制</text>
+  <text x="180.0" y="534.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">二手价 ≤ 原价 × 0.98</text>
+  <path d="M180 552 L180 591" fill="none" stroke="#8a9a92" stroke-width="1.5" marker-end="url(#ar)"/>
+  <rect x="40" y="596" width="280" height="56" rx="10" fill="#eef7f2" stroke="#cfe7db" stroke-width="0.6"/>
+  <text x="180.0" y="615.0" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="600" fill="#1c2a24">返回结果</text>
+  <text x="180.0" y="634.0" text-anchor="middle" dominant-baseline="central" font-size="12.5" fill="#4a5a52">价格 · 区间 · 置信度 · 依据</text>
+  <text x="40" y="678" font-size="12.5" fill="#8a9a92" dominant-baseline="central">填写了原价则直接用「原价 × 系数」作锚点，跳过右上角那次 LLM 新品价调用</text>
+</svg>

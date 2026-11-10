@@ -24,6 +24,31 @@
       </button>
     </div>
 
+    <!-- ①⑤ 小法庭 / 求购墙入口：与分类卡片同款，浅绿渐变区分 -->
+    <div class="filter-bar__jury-row">
+      <button type="button" class="cat-card cat-card--jury" @click="router.push('/jury')">
+        <span class="cat-card__icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v18" />
+            <path d="M8 21h8" />
+            <path d="M12 5h7M12 5H5" />
+            <path d="M5 5l-2.6 6a2.9 2.9 0 0 0 5.2 0L5 5Z" />
+            <path d="M19 5l-2.6 6a2.9 2.9 0 0 0 5.2 0L19 5Z" />
+          </svg>
+        </span>
+        <span class="cat-card__label">小法庭</span>
+      </button>
+      <button type="button" class="cat-card cat-card--jury" @click="router.push('/want-wall')">
+        <span class="cat-card__icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7V4h9.6l7.4 7.4a2 2 0 0 1 0 2Z" />
+            <circle cx="7.5" cy="7.5" r="1.2" />
+          </svg>
+        </span>
+        <span class="cat-card__label">求购墙</span>
+      </button>
+    </div>
+
     <!-- ② 二级分类：胶囊 chips（选中一级后出现） -->
     <div v-if="topCategoryId && subCategories.length" class="filter-bar__subs">
       <button
@@ -48,28 +73,46 @@
 
     <div class="filter-bar__divider"></div>
 
-    <!-- ③ 条件行：校区胶囊 / 价格 / 排序 / 关键词标签 -->
+    <!-- ③ 条件行：搜索 / 学校校区 / 价格 / 排序 -->
     <div class="filter-bar__row">
+      <div class="filter-bar__group filter-bar__group--search">
+        <el-input
+          v-model="keywordText"
+          class="filter-bar__search"
+          placeholder="搜索教材、数码、生活用品…"
+          clearable
+          @keyup.enter="emitChange"
+          @change="emitChange"
+          @clear="emitChange"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
+
       <div class="filter-bar__group">
-        <span class="filter-bar__group-label">校区</span>
-        <button
-          type="button"
-          class="seg-chip"
-          :class="{ 'is-active': !form.campus }"
-          @click="setCampus('')"
+        <span class="filter-bar__group-label">学校</span>
+        <el-select
+          v-model="form.schoolId"
+          class="filter-bar__campus-select"
+          placeholder="全部学校"
+          clearable
+          filterable
+          @change="onSchoolChange"
         >
-          全部
-        </button>
-        <button
-          v-for="c in campusOptions"
-          :key="c"
-          type="button"
-          class="seg-chip"
-          :class="{ 'is-active': form.campus === c }"
-          @click="setCampus(c)"
+          <el-option v-for="s in schools" :key="s.id" :label="s.name" :value="s.id" />
+        </el-select>
+        <el-select
+          v-model="form.campusId"
+          class="filter-bar__campus-select"
+          :placeholder="form.schoolId ? '全部校区' : '先选学校'"
+          :disabled="!form.schoolId"
+          clearable
+          @change="emitChange"
         >
-          {{ c }}
-        </button>
+          <el-option v-for="c in campusOptions" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
       </div>
 
       <div class="filter-bar__group">
@@ -100,23 +143,19 @@
         </el-select>
       </div>
 
-      <div v-if="form.keyword" class="filter-bar__group">
-        <span class="filter-bar__group-label">关键词</span>
-        <span class="kw-chip">
-          「{{ form.keyword }}」
-          <el-icon class="kw-chip__close" @click="clearKeyword"><CircleCloseFilled /></el-icon>
-        </span>
-      </div>
-
       <el-button text type="primary" class="filter-bar__reset" @click="reset">重置</el-button>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { CircleCloseFilled, Grid } from '@element-plus/icons-vue'
-import { CAMPUS_OPTIONS, SORT_OPTIONS } from '@/constants'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { Grid, Search } from '@element-plus/icons-vue'
+import { SORT_OPTIONS } from '@/constants'
+import { loadSchools } from '@/api/school'
+
+const router = useRouter()
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -126,14 +165,33 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
-const campusOptions = CAMPUS_OPTIONS
 const sortOptions = SORT_OPTIONS
+
+/** 学校列表（含校区），首次进入时拉取并缓存 7 天 */
+const schools = ref([])
+
+onMounted(async () => {
+  try {
+    schools.value = await loadSchools()
+  } catch (error) {
+    // 接口不可用时保持空列表，下拉降级为不可选，不影响其余筛选
+    schools.value = []
+  }
+})
+
+/** 当前学校下的校区；未选学校时为空，避免跨校混选 */
+const campusOptions = computed(() => {
+  if (!form.schoolId) return []
+  const school = schools.value.find((s) => String(s.id) === String(form.schoolId))
+  return school?.campuses || []
+})
 
 // 本地副本：子组件绝不直接改 props
 const form = reactive({
   keyword: '',
   categoryId: '',
-  campus: '',
+  schoolId: '',
+  campusId: '',
   minPrice: null,
   maxPrice: null,
   sort: 'latest'
@@ -145,6 +203,7 @@ const subCategoryId = ref('')
 
 const minPriceText = ref('')
 const maxPriceText = ref('')
+const keywordText = ref('')
 
 // ---------------- 分类二级联动 ----------------
 /** 注意：后端 Long 序列化为字符串（"parentId": "0"），必须用 String 比较 */
@@ -179,13 +238,9 @@ function selectSub(value) {
   emitChange()
 }
 
-function setCampus(value) {
-  form.campus = value
-  emitChange()
-}
-
-function clearKeyword() {
-  form.keyword = ''
+/** 切换学校时清空校区，避免出现「A 校 + B 校校区」的非法组合 */
+function onSchoolChange() {
+  form.campusId = ''
   emitChange()
 }
 
@@ -223,7 +278,8 @@ watch(
     if (!value) return
     form.keyword = value.keyword || ''
     form.categoryId = value.categoryId || ''
-    form.campus = value.campus || ''
+    form.schoolId = value.schoolId || ''
+    form.campusId = value.campusId || ''
     form.minPrice = value.minPrice === '' || value.minPrice === undefined || value.minPrice === null
       ? null
       : Number(value.minPrice)
@@ -233,6 +289,7 @@ watch(
     form.sort = value.sort || 'latest'
     minPriceText.value = form.minPrice === null ? '' : String(form.minPrice)
     maxPriceText.value = form.maxPrice === null ? '' : String(form.maxPrice)
+    keywordText.value = form.keyword
     syncCategorySelects(form.categoryId)
   },
   { immediate: true, deep: true }
@@ -247,12 +304,14 @@ watch(
 
 /** 条件变化：向上抛出（父级负责回到第 1 页并写 URL） */
 function emitChange() {
+  form.keyword = keywordText.value.trim()
   form.minPrice = minPriceText.value === '' ? null : Number(minPriceText.value)
   form.maxPrice = maxPriceText.value === '' ? null : Number(maxPriceText.value)
   const payload = {
     keyword: form.keyword || '',
     categoryId: form.categoryId || '',
-    campus: form.campus || '',
+    campusId: form.campusId || '',
+    schoolId: form.schoolId || '',
     minPrice: form.minPrice ?? '',
     maxPrice: form.maxPrice ?? '',
     sort: form.sort || 'latest'
@@ -265,12 +324,14 @@ function emitChange() {
 function reset() {
   form.keyword = ''
   form.categoryId = ''
-  form.campus = ''
+  form.schoolId = ''
+  form.campusId = ''
   form.minPrice = null
   form.maxPrice = null
   form.sort = 'latest'
   minPriceText.value = ''
   maxPriceText.value = ''
+  keywordText.value = ''
   topCategoryId.value = ''
   subCategoryId.value = ''
   emitChange()
@@ -390,25 +451,17 @@ function reset() {
   margin-right: 2px;
 }
 
-.seg-chip {
-  padding: 4px 13px;
-  border: none;
+/* 学校 / 校区两级下拉：学校略宽以容纳「桂林电子科技大学」等长校名 */
+.filter-bar__campus-select {
+  width: 182px;
+}
+
+.filter-bar__campus-select + .filter-bar__campus-select {
+  width: 132px;
+}
+
+.filter-bar__campus-select :deep(.el-select__wrapper) {
   border-radius: 999px;
-  background: transparent;
-  color: var(--brix-text-secondary);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.18s ease;
-}
-
-.seg-chip:hover {
-  color: var(--brix-text);
-}
-
-.seg-chip.is-active {
-  background: var(--brix-primary-soft);
-  color: var(--brix-primary);
-  font-weight: 600;
 }
 
 .filter-bar__price-input {
@@ -432,27 +485,38 @@ function reset() {
   border-radius: 999px;
 }
 
-/* 当前关键词标签（来自顶部导航搜索） */
-.kw-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px 4px 12px;
+/* 搜索框（条件行首位） */
+.filter-bar__group--search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.filter-bar__search {
+  width: 100%;
+}
+
+.filter-bar__search :deep(.el-input__wrapper) {
   border-radius: 999px;
-  background: var(--brix-primary-soft);
-  color: var(--brix-primary);
-  font-size: 13px;
-  font-weight: 500;
 }
 
-.kw-chip__close {
-  cursor: pointer;
-  font-size: 15px;
-  opacity: 0.7;
+/* ---------- ①⑤ 小法庭入口（分类下方，浅绿渐变与分类卡区分） ---------- */
+.filter-bar__jury-row {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
 }
 
-.kw-chip__close:hover {
-  opacity: 1;
+.cat-card--jury {
+  background: linear-gradient(135deg, #e7f3ec 0%, #d8ece1 55%, #c6e3d3 100%);
+}
+
+.cat-card--jury:hover {
+  background: linear-gradient(135deg, #d8ece1 0%, #c6e3d3 55%, #aed9c2 100%);
+}
+
+.cat-card--jury:hover .cat-card__icon,
+.cat-card--jury:hover .cat-card__label {
+  color: var(--brix-primary-strong);
 }
 
 .filter-bar__reset {

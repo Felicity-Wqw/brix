@@ -80,6 +80,17 @@ public interface OrderService {
     IPage<OrderVO> pageSold(Long sellerId, OrderQuery query);
 
     /**
+     * 后台订单列表（仅 OPERATOR）：全平台订单，只读排查用。
+     *
+     * <p>刻意不提供「后台改订单状态」的接口——订单状态只能由买卖双方的
+     * 支付 / 发货 / 确认 / 取消动作驱动，运营介入会破坏资金链路的一致性。</p>
+     *
+     * @param query 状态 / 关键词 / 买卖家 / 分页
+     * @return 分页结果
+     */
+    IPage<OrderVO> pageForAdmin(OrderQuery query);
+
+    /**
      * 订单详情：仅买卖双方与后台角色可见。
      *
      * @param userId  当前用户 ID

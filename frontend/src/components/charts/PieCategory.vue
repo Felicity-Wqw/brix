@@ -9,7 +9,9 @@ import * as echarts from 'echarts'
 const props = defineProps({
   // [{ name: '数码电子', value: 5 }]
   data: { type: Array, default: () => [] },
-  height: { type: Number, default: 280 }
+  height: { type: Number, default: 280 },
+  /** 自定义配色（如风险分布用绿/琥珀/红表达风险高低），不传则用品牌绿系 */
+  colors: { type: Array, default: () => ['#0FA968', '#36B37E', '#5AC8A2', '#F5A623', '#FF7A45', '#8C8C8C'] }
 })
 
 const chartRef = ref(null)
@@ -27,7 +29,7 @@ function render() {
   const points = props.data || []
   chart.setOption(
     {
-      color: PALETTE,
+      color: props.colors && props.colors.length ? props.colors : PALETTE,
       tooltip: { trigger: 'item', formatter: '{b}：{c} 件（{d}%）' },
       legend: { bottom: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: '#646a73', fontSize: 12 } },
       series: [

@@ -92,6 +92,9 @@ public class OrderVO implements Serializable {
     /** 预付款结算给卖家的时间 */
     private LocalDateTime settleTime;
 
+    /** 退款时间（取消已支付订单或售后退款完成时写入） */
+    private LocalDateTime refundTime;
+
     /** 当前用户在该订单中的身份：BUYER / SELLER / ADMIN */
     private String viewerRole;
 

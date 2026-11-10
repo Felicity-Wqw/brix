@@ -9,9 +9,17 @@ export interface UserInfo {
   avatar: string
   school?: string
   campus?: string
+  /** 学校 ID（Long → String，两级联动回显用） */
+  schoolId?: string
+  /** 校区 ID（Long → String，两级联动回显用） */
+  campusId?: string
   phone?: string
   bio?: string
-  role: 'USER'
+  /**
+   * 角色。三层权限的后端枚举，前端只做体验层分流：
+   * USER 普通用户 / REVIEWER 审核员 / OPERATOR 运营。
+   */
+  role: 'USER' | 'REVIEWER' | 'OPERATOR'
   roleDesc?: string
   status: 'NORMAL' | 'DISABLED'
   statusDesc?: string
@@ -58,8 +66,18 @@ export const useAuthStore = defineStore('auth', {
     /** 是否已登录 */
     isLogin: (state): boolean => !!state.token,
 
-    /** 当前角色（未登录为空串；本平台仅 USER） */
+    /** 当前角色（未登录为空串） */
     role: (state): string => state.user?.role || '',
+
+    /** 是否后台角色（审核员或运营），决定能否进入 /admin */
+    isAdmin: (state): boolean =>
+      state.user?.role === 'REVIEWER' || state.user?.role === 'OPERATOR',
+
+    /** 是否为审核员（只负责商品审核、举报处理） */
+    isReviewer: (state): boolean => state.user?.role === 'REVIEWER',
+
+    /** 是否为运营（只负责数据看板、用户、订单、分类） */
+    isOperator: (state): boolean => state.user?.role === 'OPERATOR',
 
     /** 是否处于游客浏览模式（未登录但选择先逛逛） */
     isGuestMode: (): boolean => localStorage.getItem(GUEST_KEY) === '1'
@@ -72,6 +90,20 @@ export const useAuthStore = defineStore('auth', {
      */
     async login(payload: LoginPayload): Promise<void> {
       const data = (await request.post('/auth/login', payload)) as LoginResult
+      this.applyLogin(data)
+    },
+
+    /**
+     * 后台登录：走后端独立入口 /admin/login。
+     *
+     * 与前台登录共用同一套 JWT 与本地存储，因此后台登录会顶掉前台登录态
+     * （同一浏览器同一时刻只有一个身份）。这对答辩演示是更清晰的心智：
+     * 要么在逛市场，要么在管市场。
+     *
+     * 服务端会二次校验角色，非 REVIEWER/OPERATOR 一律拒绝，前端仅做提示。
+     */
+    async adminLogin(payload: LoginPayload): Promise<void> {
+      const data = (await request.post('/admin/login', payload)) as LoginResult
       this.applyLogin(data)
     },
 

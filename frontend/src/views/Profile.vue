@@ -38,15 +38,37 @@
             <el-input v-model="profileForm.nickname" maxlength="20" />
           </el-form-item>
           <el-form-item label="学校">
-            <el-input v-model="profileForm.school" maxlength="100" />
+            <el-select
+              v-model="profileForm.schoolId"
+              placeholder="选择学校"
+              filterable
+              clearable
+              style="width: 100%"
+              @change="onSchoolChange"
+            >
+              <el-option v-for="s in schools" :key="s.id" :label="s.name" :value="s.id" />
+            </el-select>
           </el-form-item>
           <el-form-item label="校区">
-            <el-select v-model="profileForm.campus" style="width: 100%">
-              <el-option v-for="campus in CAMPUS_OPTIONS" :key="campus" :label="campus" :value="campus" />
+            <el-select
+              v-model="profileForm.campusId"
+              :placeholder="profileForm.schoolId ? '选择校区' : '请先选择学校'"
+              :disabled="!profileForm.schoolId"
+              clearable
+              style="width: 100%"
+              @change="onCampusChange"
+            >
+              <el-option v-for="c in campusOptions" :key="c.id" :label="c.name" :value="c.id" />
             </el-select>
           </el-form-item>
           <el-form-item label="手机号" prop="phone">
-            <el-input v-model="profileForm.phone" maxlength="11" />
+            <el-input
+              v-model="profileForm.phone"
+              type="tel"
+              maxlength="11"
+              placeholder="11 位手机号"
+              @input="onPhoneInput"
+            />
           </el-form-item>
           <el-form-item label="简介">
             <el-input v-model="profileForm.bio" type="textarea" :rows="3" maxlength="255" show-word-limit />
@@ -119,11 +141,15 @@ import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { changePassword as changePasswordApi, updateProfile, uploadAvatar } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
-import { CAMPUS_OPTIONS } from '@/constants'
+import { loadSchools, resolveCampusByName } from '@/api/school'
+import { PHONE_MESSAGE, PHONE_PATTERN, sanitizePhone } from '@/constants'
 import { nicknameInitial, resolveImage } from '@/utils/format'
 
 const auth = useAuthStore()
 const router = useRouter()
+
+/** 学校字典（含校区） */
+const schools = ref([])
 
 const profileRef = ref(null)
 const passwordRef = ref(null)
@@ -141,11 +167,36 @@ const AVATAR_MAX_SIZE = 5 * 1024 * 1024
 
 const profileForm = reactive({
   nickname: '',
+  /** 学校名称快照（后端存字符串） */
   school: '',
+  /** 校区名称快照 */
   campus: '',
+  schoolId: '',
+  campusId: '',
   phone: '',
   bio: ''
 })
+
+/** 当前学校下的校区；未选学校时为空，避免跨校混选 */
+const campusOptions = computed(() => {
+  if (!profileForm.schoolId) return []
+  const school = schools.value.find((s) => String(s.id) === String(profileForm.schoolId))
+  return school?.campuses || []
+})
+
+/** 切换学校：清空校区并同步学校名称快照 */
+function onSchoolChange() {
+  const school = schools.value.find((s) => String(s.id) === String(profileForm.schoolId))
+  profileForm.school = school ? school.name : ''
+  profileForm.campusId = ''
+  profileForm.campus = ''
+}
+
+/** 选中校区：同步校区名称快照 */
+function onCampusChange() {
+  const campus = campusOptions.value.find((c) => String(c.id) === String(profileForm.campusId))
+  profileForm.campus = campus ? campus.name : ''
+}
 
 const passwordForm = reactive({
   oldPassword: '',
@@ -169,7 +220,12 @@ const avatarSrc = computed(() => {
 
 const profileRules = {
   nickname: [{ required: true, message: '昵称不能为空', trigger: 'blur' }],
-  phone: [{ pattern: /^$|^\d{11}$/, message: '手机号必须为 11 位数字', trigger: 'blur' }]
+  phone: [{ pattern: PHONE_PATTERN, message: PHONE_MESSAGE, trigger: 'blur' }]
+}
+
+/** 输入即过滤非数字，避免字母混进手机号 */
+function onPhoneInput(value) {
+  profileForm.phone = sanitizePhone(value)
 }
 
 const passwordRules = {
@@ -196,6 +252,16 @@ function fillProfile() {
   profileForm.nickname = user.nickname || ''
   profileForm.school = user.school || ''
   profileForm.campus = user.campus || ''
+  profileForm.schoolId = user.schoolId || ''
+  profileForm.campusId = user.campusId || ''
+  // 老账号只存了校区名称、没有 ID：名称全库唯一时自动补全，跨校重名留给用户手选
+  if (!profileForm.campusId && profileForm.campus) {
+    const hit = resolveCampusByName(schools.value, profileForm.campus)
+    if (hit) {
+      profileForm.schoolId = hit.schoolId
+      profileForm.campusId = hit.campusId
+    }
+  }
   profileForm.phone = user.phone || ''
   profileForm.bio = user.bio || ''
 }
@@ -254,8 +320,10 @@ async function saveProfile() {
   try {
     await updateProfile({
       nickname: profileForm.nickname.trim(),
-      school: profileForm.school.trim(),
+      school: profileForm.school,
       campus: profileForm.campus,
+      schoolId: profileForm.schoolId || null,
+      campusId: profileForm.campusId || null,
       phone: profileForm.phone.trim(),
       bio: profileForm.bio.trim()
     })
@@ -289,6 +357,12 @@ async function changePassword() {
 }
 
 onMounted(async () => {
+  // 学校字典先就绪，fillProfile 里的名称反查才有数据可用
+  try {
+    schools.value = (await loadSchools()) || []
+  } catch (error) {
+    schools.value = []
+  }
   if (!auth.user) {
     try {
       await auth.fetchMe()

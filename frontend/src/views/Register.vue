@@ -3,7 +3,7 @@
     <div class="auth-card">
       <div class="auth-card__head">
         <div class="auth-card__brand">
-          <span class="auth-card__mark">归</span>
+          <img :src="logoIcon" alt="物归校园" class="auth-card__mark auth-card__mark--img" style="width: 40px; height: 40px; object-fit: contain;" />
           <span class="auth-card__brand-name">物归校园</span>
         </div>
         <h1 class="auth-card__title">注册账号</h1>
@@ -20,16 +20,38 @@
         <el-form-item label="昵称" prop="nickname">
           <el-input v-model="form.nickname" placeholder="展示给别人看的名字" />
         </el-form-item>
-        <el-form-item label="学校" prop="school">
-          <el-input v-model="form.school" placeholder="示例大学" />
+        <el-form-item label="学校" prop="schoolId">
+          <el-select
+            v-model="form.schoolId"
+            placeholder="选择你就读的学校（可跳过，稍后补全）"
+            filterable
+            clearable
+            style="width: 100%"
+            @change="onSchoolChange"
+          >
+            <el-option v-for="s in schools" :key="s.id" :label="s.name" :value="s.id" />
+          </el-select>
         </el-form-item>
-        <el-form-item label="校区" prop="campus">
-          <el-select v-model="form.campus" placeholder="选择你的校区" style="width: 100%">
-            <el-option v-for="campus in CAMPUS_OPTIONS" :key="campus" :label="campus" :value="campus" />
+        <el-form-item label="校区" prop="campusId">
+          <el-select
+            v-model="form.campusId"
+            :placeholder="form.schoolId ? '选择你的校区' : '请先选择学校'"
+            :disabled="!form.schoolId"
+            clearable
+            style="width: 100%"
+            @change="onCampusChange"
+          >
+            <el-option v-for="c in campusOptions" :key="c.id" :label="c.name" :value="c.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="手机号" prop="phone">
-          <el-input v-model="form.phone" placeholder="11 位数字" maxlength="11" />
+          <el-input
+            v-model="form.phone"
+            type="tel"
+            placeholder="11 位手机号（选填）"
+            maxlength="11"
+            @input="onPhoneInput"
+          />
         </el-form-item>
         <el-button type="primary" class="auth-card__submit" :loading="loading" @click="submit">注册并登录</el-button>
       </el-form>
@@ -43,14 +65,19 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { CAMPUS_OPTIONS } from '@/constants'
+import { loadSchools } from '@/api/school'
+import logoIcon from '@/assets/logo-icon.png'
+import { PHONE_MESSAGE, PHONE_PATTERN, sanitizePhone } from '@/constants'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+/** 学校字典（含校区）；接口不可用时保持空列表，注册仍可完成 */
+const schools = ref([])
 
 const formRef = ref(null)
 const loading = ref(false)
@@ -58,9 +85,42 @@ const form = reactive({
   username: '',
   password: '',
   nickname: '',
-  school: '示例大学',
+  /** 学校名称快照（后端存字符串） */
+  school: '',
+  /** 校区名称快照 */
   campus: '',
+  schoolId: '',
+  campusId: '',
   phone: ''
+})
+
+/** 当前学校下的校区；未选学校时为空，避免跨校混选 */
+const campusOptions = computed(() => {
+  if (!form.schoolId) return []
+  const school = schools.value.find((s) => String(s.id) === String(form.schoolId))
+  return school?.campuses || []
+})
+
+/** 切换学校：清空校区，并同步学校名称快照 */
+function onSchoolChange() {
+  const school = schools.value.find((s) => String(s.id) === String(form.schoolId))
+  form.school = school ? school.name : ''
+  form.campusId = ''
+  form.campus = ''
+}
+
+/** 选中校区：同步校区名称快照 */
+function onCampusChange() {
+  const campus = campusOptions.value.find((c) => String(c.id) === String(form.campusId))
+  form.campus = campus ? campus.name : ''
+}
+
+onMounted(async () => {
+  try {
+    schools.value = (await loadSchools()) || []
+  } catch (error) {
+    schools.value = []
+  }
 })
 
 const rules = {
@@ -73,7 +133,12 @@ const rules = {
     { min: 6, message: '密码长度不能少于 6 位', trigger: 'blur' }
   ],
   nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
-  phone: [{ pattern: /^$|^\d{11}$/, message: '手机号必须为 11 位数字', trigger: 'blur' }]
+  phone: [{ pattern: PHONE_PATTERN, message: PHONE_MESSAGE, trigger: 'blur' }]
+}
+
+/** 输入即过滤非数字，避免字母混进手机号（maxlength 只管长度拦不住字符） */
+function onPhoneInput(value) {
+  form.phone = sanitizePhone(value)
 }
 
 /** 注册成功即登录 */
@@ -89,8 +154,10 @@ async function submit() {
       username: form.username.trim(),
       password: form.password,
       nickname: form.nickname.trim(),
-      school: form.school.trim(),
+      school: form.school,
       campus: form.campus,
+      schoolId: form.schoolId || null,
+      campusId: form.campusId || null,
       phone: form.phone.trim()
     })
     ElMessage.success('注册成功，欢迎加入')
@@ -145,6 +212,12 @@ async function submit() {
   color: #fff;
   font-size: 18px;
   font-weight: 700;
+}
+
+/* 图标版 logo：去掉方块底色 */
+.auth-card__mark--img {
+  background: none;
+  border-radius: 0;
 }
 
 .auth-card__brand-name {

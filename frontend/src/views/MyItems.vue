@@ -36,6 +36,15 @@
               <span><el-icon><View /></el-icon>{{ item.viewCount }} 浏览</span>
               <span><el-icon><Star /></el-icon>{{ item.favoriteCount }} 收藏</span>
             </div>
+            <!-- 待审核 / 已驳回时直接展示平台判定说明，卖家不用猜为什么没上架 -->
+            <p
+              v-if="(item.status === 'PENDING' || item.status === 'REJECTED') && item.auditReason"
+              class="my-item__audit"
+              :class="{ 'my-item__audit--reject': item.status === 'REJECTED' }"
+            >
+              <el-icon><InfoFilled /></el-icon>
+              <span>{{ item.auditReason }}</span>
+            </p>
           </div>
 
           <div class="my-item__price">
@@ -74,15 +83,18 @@
       <EmptyState v-else-if="!loading" text="还没有发布过商品" />
     </div>
 
-    <el-pagination
-      v-if="total > query.pageSize"
-      background
-      layout="prev, pager, next, total"
-      :total="total"
-      :page-size="query.pageSize"
-      :current-page="query.currentPage"
-      @current-change="onPageChange"
-    />
+    <!-- 分页槽位常驻：切换页签时即使只有一页，也不让页脚上下跳动 -->
+    <div class="my-items__pager">
+      <el-pagination
+        v-if="total > query.pageSize"
+        background
+        layout="prev, pager, next, total"
+        :total="total"
+        :page-size="query.pageSize"
+        :current-page="query.currentPage"
+        @current-change="onPageChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -165,6 +177,15 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* 分页槽位：无分页时也占住同样高度，避免页脚随页签上下跳 */
+.my-items__pager {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 40px;
+  padding-top: 8px;
+}
+
 .my-item {
   display: flex;
   align-items: center;
@@ -238,6 +259,30 @@ onMounted(load)
   display: inline-flex;
   align-items: center;
   gap: 3px;
+}
+
+/* 审核判定说明：待审核为琥珀色，已驳回为警示红 */
+.my-item__audit {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  margin: 8px 0 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fff5e6;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #b8730b;
+}
+
+.my-item__audit--reject {
+  background: #fdece8;
+  color: #c9411f;
+}
+
+.my-item__audit .el-icon {
+  margin-top: 2px;
+  flex: none;
 }
 
 .my-item__price {

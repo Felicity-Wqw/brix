@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.brix.campus.mapper.AdminStatsMapper">
+
+    <!-- ========================================================================
+         口径说明（与 AdminDashboardVO 的注释保持一致）：
+           · 成交 = t_order.status = 'DONE'，成交时间取 finish_time
+           · GMV  = 已完成订单 amount 求和（不是挂牌价求和）
+           · 学校维度取订单上的 school_id 快照，商品被删/改归属不影响历史
+           · 所有查询都带 deleted = 0，逻辑删除的数据不进统计
+         ==================================================================== -->
+
+    <!-- 概览：8 个标量子查询，一次往返取全 -->
+    <select id="selectOverview" resultType="com.brix.campus.model.vo.AdminDashboardVO$Overview">
+        SELECT
+            (SELECT COUNT(*) FROM t_user u
+              WHERE u.deleted = 0)                                              AS userCount,
+            (SELECT COUNT(*) FROM t_user u
+              WHERE u.deleted = 0 AND u.created_at &gt;= #{userSince})            AS userNew7d,
+            (SELECT COUNT(*) FROM t_item i
+              WHERE i.deleted = 0 AND i.status = 'ON_SALE')                     AS itemOnSale,
+            (SELECT COUNT(*) FROM t_item i
+              WHERE i.deleted = 0 AND i.status = 'PENDING')                     AS itemPending,
+            (SELECT COUNT(*) FROM t_item i
+              WHERE i.deleted = 0 AND i.status = 'REJECTED'
+                AND IFNULL(i.audit_at, i.updated_at) &gt;= #{rejectSince})         AS itemRejected7d,
+            (SELECT COUNT(*) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE')                        AS orderDone,
+            (SELECT COUNT(*) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE'
+                AND o.finish_time &gt;= CURDATE())                                AS orderDoneToday,
+            (SELECT IFNULL(SUM(o.amount), 0) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE')                        AS gmv,
+            (SELECT IFNULL(ROUND(AVG(o.amount), 2), 0) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE')                        AS avgAmount,
+            (SELECT IFNULL(SUM(o.amount), 0) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE'
+                AND o.finish_time &gt;= #{periodStart})                           AS periodGmv,
+            (SELECT IFNULL(SUM(o.amount), 0) FROM t_order o
+              WHERE o.deleted = 0 AND o.status = 'DONE'
+                AND o.finish_time &gt;= #{prevStart}
+                AND o.finish_time &lt; #{periodStart})                            AS prevGmv
+    </select>
+
+    <!-- 成交趋势：按天聚合 -->
+    <select id="selectTrend" resultType="com.brix.campus.model.vo.AdminDashboardVO$TrendPoint">
+        SELECT
+            DATE_FORMAT(o.finish_time, '%Y-%m-%d')  AS date,
+            COUNT(*)                                AS orderCount,
+            IFNULL(SUM(o.amount), 0)                AS amount
+        FROM t_order o
+        WHERE o.deleted = 0
+          AND o.status = 'DONE'
+          AND o.finish_time &gt;= #{start}
+        GROUP BY DATE_FORMAT(o.finish_time, '%Y-%m-%d')
+        ORDER BY date ASC
+    </select>
+
+    <!-- 在售商品分类分布 -->
+    <select id="selectCategorySlices" resultType="com.brix.campus.model.vo.AdminDashboardVO$Slice">
+        SELECT
+            IFNULL(c.name, '其他')                  AS name,
+            COUNT(*)                                AS count,
+            IFNULL(SUM(i.price), 0)                 AS amount
+        FROM t_item i
+        LEFT JOIN t_category c ON c.id = i.category_id AND c.deleted = 0
+        WHERE i.deleted = 0 AND i.status = 'ON_SALE'
+        GROUP BY i.category_id, c.name
+        ORDER BY count DESC
+    </select>
+
+    <!-- 各学校交易量：成交订单按学校快照聚合 + 该校在售商品数 -->
+    <select id="selectSchoolSlices" resultType="com.brix.campus.model.vo.AdminDashboardVO$SchoolSlice">
+        SELECT
+            o.school_id                             AS schoolId,
+            IFNULL(s.name, '未归属校区')             AS schoolName,
+            COUNT(*)                                AS orderCount,
+            IFNULL(SUM(o.amount), 0)                AS amount,
+            (SELECT COUNT(*) FROM t_item i
+              WHERE i.deleted = 0 AND i.status = 'ON_SALE'
+                AND i.school_id = o.school_id)      AS onSaleCount
+        FROM t_order o
+        LEFT JOIN t_school s ON s.id = o.school_id AND s.deleted = 0
+        WHERE o.deleted = 0 AND o.status = 'DONE'
+        GROUP BY o.school_id, s.name
+        ORDER BY amount DESC
+    </select>
+
+    <!-- 风险级别分布（含历史数据的 LOW）
+         注意：GROUP BY 必须直接用 i.risk_level，不能写 GROUP BY IFNULL(...) —
+         MySQL 8 的 only_full_group_by 认不出两者等价，会直接报错。 -->
+    <select id="selectRiskSlices" resultType="com.brix.campus.model.vo.AdminDashboardVO$Slice">
+        SELECT
+            CASE i.risk_level
+                WHEN 'LOW'    THEN '低风险（直发）'
+                WHEN 'MEDIUM' THEN '中风险（待审）'
+                WHEN 'HIGH'   THEN '高风险（驳回）'
+                ELSE '未分级'
+            END                                     AS name,
+            COUNT(*)                                AS count,
+            IFNULL(SUM(i.price), 0)                 AS amount
+        FROM t_item i
+        WHERE i.deleted = 0
+        GROUP BY i.risk_level
+    </select>
+
+    <!-- 漏斗四个计数 -->
+    <select id="countAllItems" resultType="long">
+        SELECT COUNT(*) FROM t_item WHERE deleted = 0
+    </select>
+
+    <select id="countItemsWithRisk" resultType="long">
+        SELECT COUNT(*) FROM t_item WHERE deleted = 0 AND risk_level IS NOT NULL
+    </select>
+
+    <select id="countItemsViewed" resultType="long">
+        SELECT COUNT(*) FROM t_item WHERE deleted = 0 AND view_count &gt; 0
+    </select>
+
+    <select id="countItemsOrdered" resultType="long">
+        SELECT COUNT(DISTINCT o.item_id) FROM t_order o WHERE o.deleted = 0
+    </select>
+
+    <select id="countItemsDone" resultType="long">
+        SELECT COUNT(DISTINCT o.item_id) FROM t_order o
+         WHERE o.deleted = 0 AND o.status = 'DONE'
+    </select>
+
+    <select id="countItemsByRisk" resultType="long">
+        SELECT COUNT(*) FROM t_item WHERE deleted = 0 AND risk_level = #{level}
+    </select>
+
+</mapper>

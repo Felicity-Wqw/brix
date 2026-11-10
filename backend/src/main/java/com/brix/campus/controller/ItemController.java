@@ -10,6 +10,8 @@ import com.brix.campus.model.vo.ItemVO;
 import com.brix.campus.security.SecurityUtils;
 import com.brix.campus.service.ItemService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -93,9 +95,9 @@ public class ItemController {
      * @return 空
      */
     @PutMapping("/{id}")
-    public R<Void> update(@PathVariable("id") Long id, @RequestBody @Valid ItemSaveDTO dto) {
-        itemService.update(SecurityUtils.currentUserId(), id, dto);
-        return R.ok(null, "修改成功");
+    public R<ItemVO> update(@PathVariable("id") Long id, @RequestBody @Valid ItemSaveDTO dto) {
+        ItemVO item = itemService.update(SecurityUtils.currentUserId(), id, dto);
+        return R.ok(item, "修改成功");
     }
 
     /**

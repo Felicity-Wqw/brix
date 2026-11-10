@@ -54,6 +54,52 @@ public final class FileUtils {
     }
 
     /**
+     * 按文件头识别真实图片类型（N06 安全加固）。
+     *
+     * <p>只信任字节，不信任客户端传来的扩展名与 Content-Type：
+     * JPEG {@code FF D8 FF}、PNG {@code 89 50 4E 47 0D 0A 1A 0A}、
+     * WEBP {@code RIFF....WEBP}。识别失败返回 {@code null}。</p>
+     *
+     * @param head 文件前 12 字节
+     * @return 规范扩展名：jpg / png / webp，或 null
+     */
+    public static String detectImageExtension(byte[] head) {
+        if (head == null || head.length < 12) {
+            return null;
+        }
+        if ((head[0] & 0xFF) == 0xFF && (head[1] & 0xFF) == 0xD8 && (head[2] & 0xFF) == 0xFF) {
+            return "jpg";
+        }
+        if ((head[0] & 0xFF) == 0x89 && head[1] == 0x50 && head[2] == 0x4E && head[3] == 0x47
+                && head[4] == 0x0D && head[5] == 0x0A && head[6] == 0x1A && head[7] == 0x0A) {
+            return "png";
+        }
+        if (head[0] == 'R' && head[1] == 'I' && head[2] == 'F' && head[3] == 'F'
+                && head[8] == 'W' && head[9] == 'E' && head[10] == 'B' && head[11] == 'P') {
+            return "webp";
+        }
+        return null;
+    }
+
+    /**
+     * 判断真实类型与声明扩展名是否一致（jpeg 视作 jpg）。
+     *
+     * @param detected 真实类型
+     * @param declared 声明扩展名
+     * @return 是否一致
+     */
+    public static boolean matchesExtension(String detected, String declared) {
+        if (detected == null || declared == null) {
+            return false;
+        }
+        String ext = declared.toLowerCase(Locale.ROOT);
+        if ("jpg".equals(detected)) {
+            return "jpg".equals(ext) || "jpeg".equals(ext);
+        }
+        return detected.equals(ext);
+    }
+
+    /**
      * 生成随机文件名。
      *
      * @param extension 扩展名

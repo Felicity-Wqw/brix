@@ -33,6 +33,14 @@ public class User extends BaseEntity {
     /** 校区 */
     private String campus;
 
+    /** 所属学校 ID（可空，历史数据未填写） */
+    @TableField("school_id")
+    private Long schoolId;
+
+    /** 所属校区 ID（可空，历史数据未填写） */
+    @TableField("campus_id")
+    private Long campusId;
+
     /** 手机号（11 位数字） */
     private String phone;
 

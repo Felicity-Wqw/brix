@@ -77,6 +77,40 @@ mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/seed-transacti
 
 > ⚠️ 执行顺序必须是 schema → data → seed-transactions。
 
+### 方式 D（P2 必做）：校区体系 + 审核分流增量脚本
+
+`db/` 下的 P2 脚本全部幂等（先查 `information_schema` 再加列 / `ON DUPLICATE KEY UPDATE`），
+可重复执行，不会清库。**已跑过 P1 的库直接按顺序补跑即可**：
+
+```bash
+# 1) 建 t_school / t_campus，给 t_item、t_user、t_order 加 school_id / campus_id
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-migration.sql
+# 2) 桂林 13 所学校 / 20 个校区字典
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/seed-schools.sql
+# 3) 把演示数据里的「东/西/南校区」映射到真实校区（仅演示库需要）
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-backfill-demo.sql
+# 4) 商品审核三级分流：t_item 加 risk_level / audit_source / audit_reason / audit_by / audit_at，
+#    t_report 加 handle_remark
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-audit-migration.sql
+# 5) 后台双角色种子账号 admin_review（审核员）/ admin_ops（运营）
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-admin.sql
+# 6) 商品审核日志表 t_item_audit_log（append-only，低风险直发也留一条完整留痕）
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-audit-log.sql
+# 7) 可选：审核数据自查（只读，不写任何数据）
+mysql -u root -p --default-character-set=utf8mb4 brix_campus < db/p2-audit-demo.sql
+```
+
+> `p2-audit-demo.sql` 是**只读自查脚本**：打印商品状态分布、审核队列、审核日志明细，
+> 并跑两条一致性断言（「日志里的命中词必须真的出现在商品内容里」「待审/驳回商品必须有日志」）。
+> 两条断言都应返回 0 行。
+>
+> **审核队列的演示数据不靠脚本造**，而要用 `seller01` 真实发布（标题样例见脚本第二节的表格）。
+> 早期版本曾用脚本把几件在售商品直接改成「已驳回」并写死判定说明，导致
+> 「小米无线鼠标（描述为备用鼠标买多了闲置）」的日志显示「命中私下转账」——
+> 判定说明与商品内容对不上，已全部清除。结论只能由 `PublishAuditService` 真实产出。
+>
+> `p2-audit-log.sql` 只建表、不动任何已有数据，可以放心重复执行（幂等）。
+
 ---
 
 ## 四、启动后端（端口 8080）
@@ -174,19 +208,40 @@ npm run dev
 - **微信扫码登录沙箱**：登录页点微信图标 → 弹出模拟扫码界面 → 点「模拟已扫描」→
   「确认登录」，将以演示账号 student01 登录（纯前端模拟，无需微信）
 
-### 演示账号（密码均为 `123456`）
+### 演示账号
 
-| 账号 | 角色 | 说明 |
-| --- | --- | --- |
-| `student01` | 普通用户 | **主演示账号**，买家视角，名下也有历史订单 |
-| `seller01` ~ `seller05` | 普通用户 | 卖家视角（seller01 名下商品最多） |
-| `reviewer01` | 审核员 | 内容审核后台 |
-| `operator01` | 运营 | 数据看板后台 |
+| 账号 | 口令 | 角色 | 说明 |
+| --- | --- | --- | --- |
+| `student01` | `123456` | 普通用户 | **主演示账号**，买家视角，名下也有历史订单 |
+| `seller01` ~ `seller05` | `123456` | 普通用户 | 卖家视角（seller01 名下商品最多） |
+| `admin_review` | `admin123456` | 审核员 | 商品审核、举报处理（内容治理） |
+| `admin_ops` | `admin123456` | 运营 | 数据看板、用户管理、订单管理（平台经营） |
 
-- 管理后台入口：http://localhost:5173/#/admin/login
-- 推荐演示动线：student01 登录 → 首页筛选/搜索 → 商品详情（留言、收藏）→
+> 后台账号口令只用于本地演示；`db/p2-admin.sql` 里是 BCrypt 密文，上线前必须替换。
+> 后台账号不具备买家/卖家权限：在前台做任何交易动作都会被服务端 403 拒绝。
+
+- 前台登录页：http://localhost:5173/#/login
+- 管理后台入口：**前台登录页底部「先逛逛，游客访问」右侧的「管理后台」**，
+  或直接访问 http://localhost:5173/#/admin/login
+- 推荐演示动线（前台）：student01 登录 → 首页筛选/搜索 → 商品详情（留言、收藏）→
   「我想要」下单（面交/邮寄表单）→ 收银台微信/支付宝**支付沙箱** →
   「我的订单」确认收货 → 订单完成显示「已结算给卖家」→「数据分析」看可视化
+- 推荐演示动线（后台）：
+  1. `admin_ops` 登录 → 数据看板（7/30 天切换、各学校交易量、转化漏斗、风险分布）→
+     用户管理（封禁/解封，注意后台账号不可操作）→ 订单管理（只读排查）
+  2. `admin_review` 登录 → 商品审核（默认进「高风险优先处理区」，高危置顶；
+     点「查看」能看到这件商品的**审核证据链**：第一道闸命中什么词、第二道闸 AI 说了什么、
+     结论落入什么状态）→ 切到「待审核」队列做通过/驳回 → 举报处理 →「审核日志」按
+     风险级别 / 两道闸结果 / 是否已人工处置筛选，看全平台留痕
+  3. 想现场造数据（用 `student01` 发布，三档一次演完）：
+
+     | 标题示例 | 命中 | 结果 |
+     | --- | --- | --- |
+     | 斯伯丁篮球 7号 | 两道闸都放行 | 低风险，直接上架，首页可见 |
+     | 水弹玩具枪 送两包弹 | 第一道闸轻度词「玩具枪」+ AI 拿不准 | 中风险，进「待审核」队列 |
+     | 代开发票 各类抬头 | 第一道闸黑名单「代开发票」 | 高风险，进「高风险优先处理区」，卖家可见驳回原因 |
+
+     注意「斯伯丁篮球」这类正常商品**不能被误杀**——这是分级而不是一刀切的意义。
 
 ---
 

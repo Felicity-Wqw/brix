@@ -21,9 +21,9 @@
       </div>
       <div class="item-card__meta">
         <ConditionTag :level="item.conditionLevel" />
-        <span class="item-card__campus">
+        <span class="item-card__campus" :title="locationTitle">
           <el-icon><Location /></el-icon>
-          {{ item.campus }}
+          <span class="item-card__campus-text">{{ campusText }}</span>
         </span>
       </div>
       <div v-if="showSeller" class="item-card__footer">
@@ -38,15 +38,29 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import PriceTag from './PriceTag.vue'
 import ConditionTag from './ConditionTag.vue'
 import StatusTag from './StatusTag.vue'
 import { resolveImage } from '@/utils/format'
 
-defineProps({
+const props = defineProps({
   item: { type: Object, required: true },
   showStatus: { type: Boolean, default: false },
   showSeller: { type: Boolean, default: true }
+})
+
+/** 卡片宽度有限，只显示校区名；学校名放 title，悬停可看完整归属 */
+const campusText = computed(() => {
+  return props.item.campus || props.item.schoolName || '校内面交'
+})
+
+/** 悬停提示：学校 · 校区（历史数据可能缺一边） */
+const locationTitle = computed(() => {
+  const name = props.item.schoolName
+  const campus = props.item.campus
+  if (name && campus) return `${name} · ${campus}`
+  return campus || name || '校内面交'
 })
 </script>
 
@@ -155,6 +169,15 @@ defineProps({
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  min-width: 0;
+}
+
+/* 校区名过长（如「金鸡岭校区」并列多校）时省略，避免挤掉左侧成色标签 */
+.item-card__campus-text {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .item-card__footer {

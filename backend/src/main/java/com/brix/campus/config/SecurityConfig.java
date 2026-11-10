@@ -64,11 +64,23 @@ public class SecurityConfig {
                         .requestMatchers("/uploads/**", "/ws/**", "/error").permitAll()
                         // 2. 公开的只读接口（注意 /items/mine 必须先于 /items/** 声明）
                         .requestMatchers(HttpMethod.GET, "/categories").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/schools").permitAll()
                         .requestMatchers(HttpMethod.GET, "/items/mine").authenticated()
                         .requestMatchers(HttpMethod.GET, "/items/*/comments").permitAll()
                         .requestMatchers(HttpMethod.GET, "/items/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/users/*/reviews").permitAll()
-                        // 3. 其余全部需要登录
+                        .requestMatchers(HttpMethod.GET, "/wants").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/announcements").permitAll()
+                        // 3. 管理后台：登录入口公开（服务端校验角色），其余按最小权限矩阵拆分
+                        //    审核员只管内容，运营只管经营，交叉访问一律 403
+                        .requestMatchers("/admin/login").permitAll()
+                        .requestMatchers("/admin/items/**", "/admin/reports/**",
+                                "/admin/audit-logs/**", "/admin/refunds/**").hasRole("REVIEWER")
+                        .requestMatchers("/admin/dashboard/**", "/admin/users/**",
+                                "/admin/orders/**", "/admin/categories/**", "/admin/announcements/**").hasRole("OPERATOR")
+                        // 兜底：/admin 下新增但未归类的接口，两个后台角色都放行（避免新接口默认裸奔）
+                        .requestMatchers("/admin/**").hasAnyRole("REVIEWER", "OPERATOR")
+                        // 4. 其余全部需要登录
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

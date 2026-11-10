@@ -31,6 +31,12 @@ public class UserVO implements Serializable {
     /** 校区 */
     private String campus;
 
+    /** 学校 ID（两级联动回显用，可空） */
+    private Long schoolId;
+
+    /** 校区 ID（两级联动回显用，可空） */
+    private Long campusId;
+
     /** 手机号 */
     private String phone;
 

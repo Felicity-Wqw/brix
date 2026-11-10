@@ -37,4 +37,20 @@ public interface ItemMapper extends BaseMapper<Item> {
      * @return 标题列表
      */
     java.util.List<String> selectSoldTitles(@Param("keyword") String keyword);
+
+    /**
+     * 后台审核队列分页（支持「高风险优先」排序）。
+     *
+     * <p>为什么单独写 SQL 而不复用 {@code LambdaQueryWrapper}：
+     * 「高风险优先」要按 {@code FIELD(risk_level,'HIGH','MEDIUM','LOW')} 这个自定义顺序排，
+     * 而不是字母序（字母序 DESC 会得到 MEDIUM→LOW→HIGH，正好把高危排到最后），
+     * MyBatis-Plus 的 lambda 排序只支持字段名，表达不了这种业务顺序。</p>
+     *
+     * @param page  分页参数
+     * @param query 查询条件
+     * @return 分页结果
+     */
+    com.baomidou.mybatisplus.core.metadata.IPage<Item> selectAdminPage(
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<Item> page,
+            @Param("q") com.brix.campus.model.query.ItemQuery query);
 }

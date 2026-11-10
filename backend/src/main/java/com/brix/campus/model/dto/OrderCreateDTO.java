@@ -1,5 +1,6 @@
 package com.brix.campus.model.dto;
 
+import com.brix.campus.common.validation.ValidationPatterns;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -37,8 +38,8 @@ public class OrderCreateDTO implements Serializable {
     @Size(max = 30, message = "收货人姓名过长")
     private String receiverName;
 
-    /** 收货人手机号（邮寄单必填，11 位数字） */
-    @Pattern(regexp = "^$|^\\d{11}$", message = "手机号必须为 11 位数字")
+    /** 收货人手机号（邮寄单必填，11 位大陆手机号） */
+    @Pattern(regexp = ValidationPatterns.PHONE, message = ValidationPatterns.PHONE_MESSAGE)
     private String receiverPhone;
 
     /** 收货地址（邮寄单必填） */

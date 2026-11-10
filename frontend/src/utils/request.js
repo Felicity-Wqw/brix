@@ -31,8 +31,10 @@ function toLogin() {
   redirecting = true
   const auth = useAuthStore()
   const current = router.currentRoute.value.fullPath
+  // 后台会话过期要回后台登录页，不能把审核员丢到用户登录页
+  const inAdmin = current.startsWith('/admin')
   auth.clear()
-  router.replace({ path: '/login', query: { redirect: current } })
+  router.replace(inAdmin ? '/admin/login' : { path: '/login', query: { redirect: current } })
   setTimeout(() => {
     redirecting = false
   }, 1000)

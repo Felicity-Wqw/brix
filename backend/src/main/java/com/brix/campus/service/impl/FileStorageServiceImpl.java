@@ -63,6 +63,12 @@ public class FileStorageServiceImpl implements FileStorageService {
             throw BusinessException.param("图片大小不能超过 5MB");
         }
 
+        // 文件头校验：扩展名与 Content-Type 都由客户端提供，可伪造，必须按真实字节判断
+        String detected = FileUtils.detectImageExtension(readHead(file));
+        if (detected == null || !FileUtils.matchesExtension(detected, extension)) {
+            throw BusinessException.param("图片内容与格式不符，仅支持真实的 jpg/jpeg/png/webp 图片");
+        }
+
         String relativeUrl = FileUtils.buildRelativeUrl(type, extension);
         Path target = FileUtils.toDiskPath(webMvcConfig.resolveUploadRoot(), relativeUrl);
         try {
@@ -80,6 +86,28 @@ public class FileStorageServiceImpl implements FileStorageService {
         vo.setSize(file.getSize());
         vo.setContentType(contentType);
         return vo;
+    }
+
+    /**
+     * 读取文件前 12 字节（足够识别 jpg/png/webp 魔数）。
+     *
+     * @param file 上传文件
+     * @return 头部字节（不足 12 字节时返回实际长度）
+     */
+    private static byte[] readHead(MultipartFile file) {
+        try (var inputStream = file.getInputStream()) {
+            byte[] buffer = new byte[12];
+            int read = inputStream.readNBytes(buffer, 0, buffer.length);
+            if (read < buffer.length) {
+                byte[] actual = new byte[read];
+                System.arraycopy(buffer, 0, actual, 0, read);
+                return actual;
+            }
+            return buffer;
+        } catch (IOException e) {
+            log.error("读取上传文件头失败：{}", file.getOriginalFilename(), e);
+            throw BusinessException.param("图片读取失败，请重试");
+        }
     }
 
     @Override

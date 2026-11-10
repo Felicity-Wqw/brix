@@ -52,9 +52,15 @@ body,
   height: 100%;
 }
 
+html {
+  /* 始终保留纵向滚动条：列表从「有滚动条」切到「无滚动条」时，整页不会左右跳动 */
+  overflow-y: scroll;
+}
+
 body {
   margin: 0;
-  min-width: 1280px;
+  /* 容器本身 1200px，预留滚动条后 1280 视口仍能完整容纳，避免出现横向滚动条 */
+  min-width: 1200px;
   /* 全站背景 = 登录页同款浅绿渐变 + 双光斑；fixed 固定视口，长页滚动时光斑不跑位 */
   background:
     radial-gradient(900px 500px at 82% 18%, rgba(148, 210, 189, 0.55) 0%, transparent 60%),
