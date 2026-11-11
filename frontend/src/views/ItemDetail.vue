@@ -79,6 +79,13 @@
           </div>
           <p v-if="pendingHint" class="item-detail__pending-tip">{{ pendingHint }}</p>
           <p v-if="!purchasable" class="item-detail__sold-tip">{{ unavailableTip }}</p>
+          <div v-if="canAppeal || appeal" class="item-detail__appeal">
+            <p v-if="appeal" class="item-detail__appeal-status">
+              申诉进度：<el-tag size="small" :type="appeal.status === 'OVERTURNED' ? 'success' : appeal.status === 'MAINTAINED' ? 'info' : 'warning'">{{ appeal.statusDesc }}</el-tag>
+              <span v-if="appeal.reply" class="item-detail__appeal-reply">审核员回复：{{ appeal.reply }}</span>
+            </p>
+            <el-button v-if="canAppeal && !appeal" size="small" plain @click="appealVisible = true">提交申诉</el-button>
+          </div>
         </div>
       </div>
 
@@ -105,6 +112,20 @@
     <EmptyState v-else-if="!loading" text="商品不存在或已下架" show-reset @reset="router.push('/')" />
 
     <ReportDialog v-model="reportVisible" :item-id="itemId" />
+    <el-dialog v-model="appealVisible" title="提交申诉" width="520">
+      <p class="appeal-dialog__tip">
+        申诉仅针对「平台对商品的处置」（审核拒绝 / 被下架），请说明商品真实情况，
+        审核员将对照原审核结论与你的理由处理。
+      </p>
+      <el-input
+        v-model="appealReason" type="textarea" :rows="4" maxlength="500" show-word-limit
+        placeholder="申诉理由（10~500 字，例如说明商品来源、澄清误判）"
+      />
+      <template #footer>
+        <el-button @click="appealVisible = false">取消</el-button>
+        <el-button type="primary" :loading="appealSubmitting" @click="submitAppeal">提交申诉</el-button>
+      </template>
+    </el-dialog>
     <el-dialog v-model="tradeDialog" title="确认订单信息" width="480px">
       <el-form label-width="86px" label-position="left">
         <el-form-item v-if="item?.tradeType === 'BOTH'" label="交易方式">
@@ -174,6 +195,7 @@ import dayjs from 'dayjs'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchItemDetail, fetchSimilarItems } from '@/api/item'
+import { createAppeal, fetchItemAppeal } from '@/api/appeal'
 import { toggleFavorite as toggleFavoriteApi } from '@/api/favorite'
 import { createOrder } from '@/api/order'
 import { useAuthStore } from '@/stores/auth'
@@ -201,6 +223,12 @@ const reportVisible = ref(false)
 const tradeDialog = ref(false)
 const tradeType = ref('MEET')
 const ordering = ref(false)
+
+/** 申诉（卖家本人，商品被拒/被处置下架时可见） */
+const appealVisible = ref(false)
+const appealReason = ref('')
+const appealSubmitting = ref(false)
+const appeal = ref(null)
 
 /** 下单表单：面交=时间+地点；邮寄=收货三件套；备注通用 */
 const orderForm = reactive({
@@ -266,8 +294,34 @@ async function load() {
     item.value = await fetchItemDetail(itemId.value)
     if (item.value?.tradeType === 'SHIP') tradeType.value = 'SHIP'
     similarItems.value = (await fetchSimilarItems(itemId.value)) || []
+    if (item.value?.isOwner) {
+      appeal.value = await fetchItemAppeal(itemId.value)
+    }
   } finally {
     loading.value = false
+  }
+}
+
+/** 卖家可申诉：商品被拒或下架（被处置的判断由后端校验，主动下架会被提示不支持） */
+const canAppeal = computed(() =>
+  item.value?.isOwner && ['REJECTED', 'OFF_SHELF'].includes(item.value?.status))
+
+async function submitAppeal() {
+  const reason = appealReason.value.trim()
+  if (reason.length < 10) {
+    ElMessage.warning('申诉理由至少 10 个字')
+    return
+  }
+  appealSubmitting.value = true
+  try {
+    appeal.value = await createAppeal({ itemId: itemId.value, reason })
+    appealVisible.value = false
+    appealReason.value = ''
+    ElMessage.success('申诉已提交，请等待审核员处理')
+  } catch (error) {
+    /* 拦截器已提示 */
+  } finally {
+    appealSubmitting.value = false
   }
 }
 
@@ -514,6 +568,23 @@ onMounted(load)
   margin-top: 8px;
   font-size: 12px;
   color: var(--brix-price);
+}
+
+.item-detail__appeal {
+  margin-top: 10px;
+}
+
+.item-detail__appeal-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--brix-text-secondary);
+}
+
+.item-detail__appeal-reply {
+  color: var(--brix-text-primary);
 }
 
 .item-detail__pending-tip {

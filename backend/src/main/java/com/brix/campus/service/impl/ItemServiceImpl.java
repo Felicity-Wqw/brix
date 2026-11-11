@@ -112,7 +112,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         // 发布合规三道闸（违禁词 → 规则 → AI），按风险级别三级分流落库：
         // 低风险直接上架 / 中风险转人工审核 / 高风险驳回留痕
         AuditDecision audit = publishAuditService.judge(dto.getTitle(), dto.getDescription(),
-                categoryNameOf(dto.getCategoryId()), dto.getPrice());
+                categoryNameOf(dto.getCategoryId()), dto.getPrice(), dto.getImages());
 
         Item item = new Item();
         item.setTitle(dto.getTitle().trim());
@@ -139,7 +139,8 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
 
         // 留痕：低风险直发也写一条完整日志（商品快照 + 卖家快照 + 两道闸结果 + 审核时间）。
         // 放在图片落库之后，是为了让首图快照与实际展示的首图一致。
-        auditLogService.record(item, audit);
+        Long auditLogId = auditLogService.record(item, audit);
+        publishAuditService.afterAuditLogged(audit, auditLogId, item, categoryNameOf(dto.getCategoryId()));
 
         return toVO(item);
     }
@@ -371,7 +372,7 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         // 编辑与发布的差异：编辑是「改已有商品」，判为高风险时直接拒绝而不再落一条 REJECTED，
         // 否则一个已售出/已下架的商品会因为改了描述被置为驳回态，破坏原有状态机。
         AuditDecision audit = publishAuditService.judge(dto.getTitle(), dto.getDescription(),
-                categoryNameOf(dto.getCategoryId()), dto.getPrice());
+                categoryNameOf(dto.getCategoryId()), dto.getPrice(), dto.getImages());
         if (audit.level() == RiskLevelEnum.HIGH) {
             throw BusinessException.param("内容未通过审核：" + auditReasonOf(audit));
         }
@@ -399,7 +400,8 @@ public class ItemServiceImpl extends ServiceImpl<ItemMapper, Item> implements It
         updateById(item);
         replaceImages(item.getId(), images);
         // 编辑也留一条：卖家反复改标题试探审核口径时，日志会连成链，后台一眼看出套路
-        auditLogService.record(item, audit);
+        Long auditLogId = auditLogService.record(item, audit);
+        publishAuditService.afterAuditLogged(audit, auditLogId, item, categoryNameOf(dto.getCategoryId()));
         // 返回编辑后的商品：前端要靠 status 判断是「已上架」还是「又进了人工队列」
         return toVO(item);
     }

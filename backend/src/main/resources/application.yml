@@ -131,6 +131,22 @@ brix:
     daily-limit: ${AI_DAILY_LIMIT:20}
     # AI 接口超时时间（秒）
     timeout-seconds: ${AI_TIMEOUT_SECONDS:10}
+    # 视觉审核模型（OpenAI 兼容协议；智谱 glm-4v-flash 免费）。
+    # 留空即不启用图片审核：图片闸记 UNAVAILABLE，发布仅走文本闸
+    vision:
+      base-url: ${AI_VISION_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+      api-key: ${AI_VISION_API_KEY:}
+      model: ${AI_VISION_MODEL:glm-4v-flash}
+      timeout-seconds: ${AI_VISION_TIMEOUT_SECONDS:8}
+  pay:
+    alipay:
+      # 支付宝沙箱配置（.env.bat 注入）；app-id 为空时不装配支付 Bean，收银台降级为模拟支付
+      gateway: ${ALIPAY_GATEWAY:https://openapi-sandbox.dl.alipaydev.com/gateway.do}
+      app-id: ${ALIPAY_APP_ID:}
+      private-key: ${ALIPAY_PRIVATE_KEY:}
+      alipay-public-key: ${ALIPAY_PUBLIC_KEY:}
+      # 付款完成后浏览器回跳地址（前缀，拼接订单 ID）；浏览器本地跳转，无需公网
+      return-url: ${ALIPAY_RETURN_URL:http://localhost:5173/checkout/}
   order:
     # 订单未支付自动取消时间（分钟）
     unpaid-timeout-minutes: ${ORDER_UNPAID_TIMEOUT_MINUTES:30}

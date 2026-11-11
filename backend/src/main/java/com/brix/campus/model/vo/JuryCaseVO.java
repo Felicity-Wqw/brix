@@ -81,6 +81,12 @@ public class JuryCaseVO {
     /** 裁决理由 */
     private String rulingReason;
 
+    /** AI 预审参考 JSON（争议焦点/证据摘要/倾向），仅供陪审参考，不影响计票；AI 不可用为 null */
+    private String aiPreview;
+
+    /** AI 预审生成时间 */
+    private LocalDateTime aiPreviewedAt;
+
     private LocalDateTime ruledAt;
 
     private LocalDateTime createdAt;

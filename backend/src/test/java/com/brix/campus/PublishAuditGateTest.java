@@ -56,12 +56,16 @@ class PublishAuditGateTest {
     private PublishAuditServiceImpl serviceWithVerdict(String verdict) {
         ItemAuditAgent agent = Mockito.mock(ItemAuditAgent.class);
         Mockito.when(agent.audit(Mockito.anyString())).thenReturn(verdictOf(verdict));
-        return new PublishAuditServiceImpl(mockProvider(agent));
+        return new PublishAuditServiceImpl(mockProvider(agent),
+                Mockito.mock(com.brix.campus.service.ImageAuditService.class),
+                Mockito.mock(com.brix.campus.service.ItemAuditLogService.class));
     }
 
     /** 无 AI（未配置 Key）的服务 */
     private PublishAuditServiceImpl serviceWithoutAi() {
-        return new PublishAuditServiceImpl(mockProvider(null));
+        return new PublishAuditServiceImpl(mockProvider(null),
+                Mockito.mock(com.brix.campus.service.ImageAuditService.class),
+                Mockito.mock(com.brix.campus.service.ItemAuditLogService.class));
     }
 
     // ========================================================================
@@ -71,7 +75,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("低风险：无敏感词 + AI 通过 → LOW，两道闸明细都是 PASS")
     void lowRisk_whenBothGatesPass() {
-        AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS).judge(TITLE, DESC, CATEGORY, PRICE);
+        AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS).judge(TITLE, DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.LOW, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.PASS, decision.gate1().result());
@@ -86,7 +90,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("低风险：无 Key 时只走关键词闸，AI 记 UNAVAILABLE")
     void lowRisk_withoutAi() {
-        AuditDecision decision = serviceWithoutAi().judge(TITLE, DESC, CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge(TITLE, DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.LOW, decision.level());
         Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE, decision.gate2().result(),
@@ -101,7 +105,7 @@ class PublishAuditGateTest {
     @DisplayName("中风险：轻度关键词「玩具枪」命中 → MEDIUM，转人工")
     void mediumRisk_onMildKeyword() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS)
-                .judge("水弹玩具枪 送两包弹", "玩过两次，配件齐全。", "运动户外 / 球类运动", PRICE);
+                .judge("水弹玩具枪 送两包弹", "玩过两次，配件齐全。", "运动户外 / 球类运动", PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.MILD_HIT, decision.gate1().result());
@@ -115,7 +119,7 @@ class PublishAuditGateTest {
     @DisplayName("中风险：交易形态词「代购」命中 → MEDIUM")
     void mediumRisk_onTradeShapeKeyword() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS)
-                .judge("日本代购 保温杯", "朋友从日本带回来的，多买了几个。", "生活用品 / 厨房用品", PRICE);
+                .judge("日本代购 保温杯", "朋友从日本带回来的，多买了几个。", "生活用品 / 厨房用品", PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.MILD_HIT, decision.gate1().result());
@@ -126,7 +130,7 @@ class PublishAuditGateTest {
     @DisplayName("中风险：AI 拿不准（要求修改后重审）→ MEDIUM")
     void mediumRisk_onAiUncertain() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.REJECT_REVISE)
-                .judge(TITLE, DESC, CATEGORY, PRICE);
+                .judge(TITLE, DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals(AuditDecision.Gate2.UNCERTAIN, decision.gate2().result());
@@ -137,7 +141,7 @@ class PublishAuditGateTest {
     @DisplayName("中风险：AI 上报风控（模糊地带）→ MEDIUM，不直接封杀")
     void mediumRisk_onAiReportRisk() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.REPORT_RISK)
-                .judge(TITLE, DESC, CATEGORY, PRICE);
+                .judge(TITLE, DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals(AuditDecision.Gate2.UNCERTAIN, decision.gate2().result());
@@ -151,7 +155,7 @@ class PublishAuditGateTest {
     @DisplayName("高风险：黑名单「代开发票」命中 → HIGH")
     void highRisk_onBlacklistKeyword() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.REJECT_BAN)
-                .judge("代开发票 各类抬头", "可开各类发票，当天出。", "其他", PRICE);
+                .judge("代开发票 各类抬头", "可开各类发票，当天出。", "其他", PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.BLACK_HIT, decision.gate1().result());
@@ -164,7 +168,7 @@ class PublishAuditGateTest {
     @DisplayName("高风险：关键词无命中但 AI 判不可上架 → HIGH，来源是 AI")
     void highRisk_onAiBan() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.REJECT_BAN)
-                .judge(TITLE, DESC, CATEGORY, PRICE);
+                .judge(TITLE, DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.PASS, decision.gate1().result());
@@ -176,36 +180,39 @@ class PublishAuditGateTest {
     // ========================================================================
 
     @Test
-    @DisplayName("取严：黑名单命中的商品，AI 说 PASS 也不能降级放行")
+    @DisplayName("取严：黑名单命中直接定高危，AI 复核转后台补档（gate2 记 PENDING_BACKFILL）")
     void stricter_blacklistBeatsAiPass() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS)
-                .judge("出售自制枪支配件", DESC, CATEGORY, PRICE);
+                .judge("出售自制枪支配件", DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level(), "黑名单命中必须保持高危");
         Assertions.assertEquals(AuditDecision.Gate1.BLACK_HIT, decision.gate1().result());
-        Assertions.assertEquals(AuditDecision.Gate2.PASS, decision.gate2().result(),
-                "AI 的过程结论也要如实保留，日志才能还原两道闸各自的判断");
+        Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE, decision.gate2().result(),
+                "黑名单结论已足以定级，文本 AI 复核不再阻塞发布，gate2 记待补档");
+        Assertions.assertNotNull(decision.gate2().reason(), "降级原因要写清楚，便于排查");
     }
 
     @Test
     @DisplayName("取严：轻度词命中的商品，AI 说 PASS 也不能降到低风险")
     void stricter_mildKeywordBeatsAiPass() {
         AuditDecision decision = serviceWithVerdict(AuditVerdict.PASS)
-                .judge("水弹玩具枪 送两包弹", DESC, CATEGORY, PRICE);
+                .judge("水弹玩具枪 送两包弹", DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level(), "轻度词命中必须保持中危");
         Assertions.assertEquals(AuditDecision.Gate1.MILD_HIT, decision.gate1().result());
     }
 
     @Test
-    @DisplayName("留痕：黑名单已定论时，AI 仍被调用一次（日志要记第二道闸结果）")
-    void auditTrail_aiStillCalledOnBlacklist() {
+    @DisplayName("留痕：黑名单已定论时，文本 AI 不再同步调用（发布零等待，复核转后台补档）")
+    void auditTrail_aiNotCalledOnBlacklist() {
         ItemAuditAgent agent = Mockito.mock(ItemAuditAgent.class);
         Mockito.when(agent.audit(Mockito.anyString())).thenReturn(verdictOf(AuditVerdict.REJECT_BAN));
-        new PublishAuditServiceImpl(mockProvider(agent))
-                .judge("代开发票 各类抬头", DESC, CATEGORY, PRICE);
+        new PublishAuditServiceImpl(mockProvider(agent),
+                Mockito.mock(com.brix.campus.service.ImageAuditService.class),
+                Mockito.mock(com.brix.campus.service.ItemAuditLogService.class))
+                .judge("代开发票 各类抬头", DESC, CATEGORY, PRICE, null);
 
-        Mockito.verify(agent, Mockito.times(1)).audit(Mockito.anyString());
+        Mockito.verify(agent, Mockito.never()).audit(Mockito.anyString());
     }
 
     @Test
@@ -214,9 +221,9 @@ class PublishAuditGateTest {
         PublishAuditServiceImpl service = serviceWithoutAi();
 
         Assertions.assertEquals(AuditDecision.Gate1.BLACK_HIT,
-                service.judge("加V看货", DESC, CATEGORY, PRICE).gate1().result());
+                service.judge("加V看货", DESC, CATEGORY, PRICE, null).gate1().result());
         Assertions.assertEquals(AuditDecision.Gate1.BLACK_HIT,
-                service.judge(TITLE, "低价出售 K粉", CATEGORY, PRICE).gate1().result());
+                service.judge(TITLE, "低价出售 K粉", CATEGORY, PRICE, null).gate1().result());
     }
 
     // ========================================================================
@@ -228,9 +235,9 @@ class PublishAuditGateTest {
     void degrade_onException() {
         ItemAuditAgent agent = Mockito.mock(ItemAuditAgent.class);
         Mockito.when(agent.audit(Mockito.anyString())).thenThrow(new RuntimeException("connection timeout"));
-        PublishAuditServiceImpl service = new PublishAuditServiceImpl(mockProvider(agent));
+        PublishAuditServiceImpl service = new PublishAuditServiceImpl(mockProvider(agent), Mockito.mock(com.brix.campus.service.ImageAuditService.class), Mockito.mock(com.brix.campus.service.ItemAuditLogService.class));
 
-        AuditDecision decision = service.judge(TITLE, DESC, CATEGORY, PRICE);
+        AuditDecision decision = service.judge(TITLE, DESC, CATEGORY, PRICE, null);
         Assertions.assertEquals(RiskLevelEnum.LOW, decision.level());
         Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE, decision.gate2().result());
         Assertions.assertNotNull(decision.gate2().reason(), "降级原因要写清楚，便于排查");
@@ -242,13 +249,15 @@ class PublishAuditGateTest {
         ItemAuditAgent nullAgent = Mockito.mock(ItemAuditAgent.class);
         Mockito.when(nullAgent.audit(Mockito.anyString())).thenReturn(null);
         Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE,
-                new PublishAuditServiceImpl(mockProvider(nullAgent))
-                        .judge(TITLE, DESC, CATEGORY, PRICE).gate2().result());
+                new PublishAuditServiceImpl(mockProvider(nullAgent),
+                        Mockito.mock(com.brix.campus.service.ImageAuditService.class),
+                        Mockito.mock(com.brix.campus.service.ItemAuditLogService.class))
+                        .judge(TITLE, DESC, CATEGORY, PRICE, null).gate2().result());
 
         ItemAuditAgent oddAgent = Mockito.mock(ItemAuditAgent.class);
         Mockito.when(oddAgent.audit(Mockito.anyString())).thenReturn(verdictOf("MAYBE"));
-        AuditDecision decision = new PublishAuditServiceImpl(mockProvider(oddAgent))
-                .judge(TITLE, DESC, CATEGORY, PRICE);
+        AuditDecision decision = new PublishAuditServiceImpl(mockProvider(oddAgent), Mockito.mock(com.brix.campus.service.ImageAuditService.class), Mockito.mock(com.brix.campus.service.ItemAuditLogService.class))
+                .judge(TITLE, DESC, CATEGORY, PRICE, null);
         Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE, decision.gate2().result());
         Assertions.assertEquals(RiskLevelEnum.LOW, decision.level(), "未知判定不能误判成违规");
     }
@@ -256,7 +265,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("降级：AI 不可用时，关键词闸仍能独立拦下黑名单")
     void degrade_stillBlocksBlacklist() {
-        AuditDecision decision = serviceWithoutAi().judge("出售自制枪支配件", DESC, CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("出售自制枪支配件", DESC, CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals(AuditDecision.Gate2.UNAVAILABLE, decision.gate2().result());
@@ -269,7 +278,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("变体：空白分隔的黑名单词（代 开 发 票）仍判高危")
     void variant_spacedBlacklist() {
-        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代 开 发 票 各类抬头", CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代 开 发 票 各类抬头", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals("代开发票", decision.gate1().hitWord());
@@ -278,7 +287,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("变体：符号分隔（代开·发票）仍判高危")
     void variant_punctuatedBlacklist() {
-        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代开·发票 加急", CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代开·发票 加急", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals("代开发票", decision.gate1().hitWord());
@@ -287,7 +296,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("变体：全角字符（加Ｖ信）仍判高危")
     void variant_fullWidth() {
-        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "便宜出，加Ｖ信聊", CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "便宜出，加Ｖ信聊", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.BLACK_HIT, decision.gate1().result());
@@ -296,7 +305,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("变体：繁体词表（代開發票）仍判高危")
     void variant_traditionalBlacklist() {
-        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代開發票 各类抬头", CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("低价出闲置", "代開發票 各类抬头", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.HIGH, decision.level());
         Assertions.assertEquals("代開發票", decision.gate1().hitWord());
@@ -306,7 +315,7 @@ class PublishAuditGateTest {
     @DisplayName("豁免：来源描述「朋友代购带回」不再误判为交易意图")
     void exempt_daigouProvenance() {
         AuditDecision decision = serviceWithoutAi()
-                .judge("闲置蓝牙耳机", "朋友代购带回，没用几次，现低价转卖。", CATEGORY, PRICE);
+                .judge("闲置蓝牙耳机", "朋友代购带回，没用几次，现低价转卖。", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.LOW, decision.level());
         Assertions.assertEquals(AuditDecision.Gate1.PASS, decision.gate1().result());
@@ -317,7 +326,7 @@ class PublishAuditGateTest {
     void exempt_onlySkipsMatchedWord() {
         // 内容同时含「朋友代购带回」（豁免）与「玩具枪」（轻度词，不豁免）
         AuditDecision decision = serviceWithoutAi()
-                .judge("闲置玩具枪", "朋友代购带回，孩子不要了。", "玩具 / 模型", PRICE);
+                .judge("闲置玩具枪", "朋友代购带回，孩子不要了。", "玩具 / 模型", PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals("玩具枪", decision.gate1().hitWord());
@@ -326,7 +335,7 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("豁免不误伤：真实交易意图「可代购」仍判中危")
     void exempt_doesNotHideIntent() {
-        AuditDecision decision = serviceWithoutAi().judge("海外好物", "长期可代购 各类日妆，价格私聊。", CATEGORY, PRICE);
+        AuditDecision decision = serviceWithoutAi().judge("海外好物", "长期可代购 各类日妆，价格私聊。", CATEGORY, PRICE, null);
 
         Assertions.assertEquals(RiskLevelEnum.MEDIUM, decision.level());
         Assertions.assertEquals("代购", decision.gate1().hitWord());
@@ -335,10 +344,10 @@ class PublishAuditGateTest {
     @Test
     @DisplayName("豁免：弓箭步 / 香烟盒等衍生词不误杀")
     void exempt_derivedPhrases() {
-        AuditDecision fitness = serviceWithoutAi().judge("跑步装备", "练弓箭步专用的束腰，几乎全新。", "运动户外", PRICE);
+        AuditDecision fitness = serviceWithoutAi().judge("跑步装备", "练弓箭步专用的束腰，几乎全新。", "运动户外", PRICE, null);
         Assertions.assertEquals(RiskLevelEnum.LOW, fitness.level());
 
-        AuditDecision collection = serviceWithoutAi().judge("老物件收藏", "收来一组香烟盒，全是老包装。", "收藏", PRICE);
+        AuditDecision collection = serviceWithoutAi().judge("老物件收藏", "收来一组香烟盒，全是老包装。", "收藏", PRICE, null);
         Assertions.assertEquals(RiskLevelEnum.LOW, collection.level());
     }
 }

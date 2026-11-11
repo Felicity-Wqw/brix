@@ -47,4 +47,14 @@ public class JuryController {
         juryService.vote(SecurityUtils.currentUserId(), id, dto);
         return R.ok(null, "投票成功");
     }
+
+    /**
+     * 平台 AI 预审参考（幂等：已生成过直接返回 false；AI 不可用静默返回 false）。
+     * 举证期结束进入陪审期后由定时任务自动生成，此接口供当事人/围观用户手动补触发。
+     */
+    @PostMapping("/cases/{id}/ai-preview")
+    public R<Boolean> aiPreview(@PathVariable("id") Long id) {
+        boolean generated = juryService.generateAiPreview(id);
+        return R.ok(generated, generated ? "预审参考已生成" : "暂未生成（可能已存在、AI 未配置或案件尚在举证期）");
+    }
 }

@@ -85,12 +85,17 @@
       width="360px"
       align-center
       append-to-body
+      class="sandbox-dialog"
       :close-on-click-modal="false"
-      :show-close="sandboxStep === 'pay'"
+      :show-header="false"
+      @closed="onSandboxClosed"
     >
       <!-- 微信支付沙箱 -->
       <div v-if="payMethod === 'WECHAT'" class="sandbox sandbox--wechat">
-        <div class="sandbox__bar sandbox__bar--wechat">微信支付</div>
+        <div class="sandbox__bar sandbox__bar--wechat">
+          微信支付
+          <button class="sandbox__close" @click="sandboxVisible = false">×</button>
+        </div>
         <div class="sandbox__body">
           <p class="sandbox__merchant">物归校园 · 向卖家付款</p>
           <div class="sandbox__amount">¥{{ formatPrice(order?.amount) }}</div>
@@ -117,20 +122,25 @@
         </div>
       </div>
 
-      <!-- 支付宝沙箱 -->
+      <!-- 支付宝沙箱：真实预下单二维码 + 查单轮询 -->
       <div v-else class="sandbox sandbox--alipay">
-        <div class="sandbox__bar sandbox__bar--alipay">支付宝 · 确认付款</div>
+        <div class="sandbox__bar sandbox__bar--alipay">
+          支付宝 · 安全付款
+          <button class="sandbox__close" @click="sandboxVisible = false">×</button>
+        </div>
         <div class="sandbox__body">
           <p class="sandbox__merchant">物归校园</p>
           <div class="sandbox__amount">¥{{ formatPrice(order?.amount) }}</div>
-          <template v-if="sandboxStep === 'pay'">
-            <div class="sandbox__channel">
-              <span>付款方式</span><b>余额（沙箱）</b>
-            </div>
+          <template v-if="sandboxStep === 'qr'">
+            <p class="sandbox__pin-tip">点击下方按钮跳转支付宝收银台</p>
+            <p class="sandbox__pin-tip">登录支付宝账户完成付款，付款完成本页自动确认</p>
+            <el-button type="primary" class="sandbox__btn sandbox__btn--alipay" @click="openCashier">
+              打开支付宝收银台
+            </el-button>
           </template>
           <template v-else-if="sandboxStep === 'processing'">
             <el-icon class="sandbox__loading is-loading"><Loading /></el-icon>
-            <p class="sandbox__pin-tip">正在付款…</p>
+            <p class="sandbox__pin-tip">正在确认付款结果…</p>
           </template>
           <template v-else>
             <el-icon class="sandbox__ok sandbox__ok--alipay"><SuccessFilled /></el-icon>
@@ -139,13 +149,7 @@
           </template>
         </div>
         <div class="sandbox__foot">
-          <el-button
-            v-if="sandboxStep === 'pay'"
-            class="sandbox__btn sandbox__btn--alipay"
-            @click="finishPay"
-          >
-            立即付款
-          </el-button>
+          <span v-if="sandboxStep === 'qr'" class="sandbox__polling">正在实时查询支付结果…</span>
         </div>
       </div>
     </el-dialog>
@@ -157,7 +161,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Loading, SuccessFilled } from '@element-plus/icons-vue'
-import { fetchOrderDetail, payOrder } from '@/api/order'
+import { fetchAlipayPagePay, fetchAlipayStatus, fetchOrderDetail, payOrder } from '@/api/order'
 import { useAuthStore } from '@/stores/auth'
 import { formatCountdown, formatPrice, payRemainSeconds, resolveImage } from '@/utils/format'
 import PriceTag from '@/components/PriceTag.vue'
@@ -192,7 +196,68 @@ function openSandbox() {
   }
   sandboxStep.value = 'pay'
   wxPin.value = 0
+  if (payMethod.value === 'ALIPAY') {
+    // 支付宝沙箱：真实预下单出二维码 + 主动查单轮询
+    startAlipayPay()
+    return
+  }
   sandboxVisible.value = true
+}
+
+/* ==================== 支付宝沙箱（真实链路） ====================
+ * precreate 出码 → 用户扫码 → 每 2s 主动查单 → 支付宝确认后
+ * 后端复用 pay() 完成流转 → 前端跳订单详情。
+ */
+const alipayUrl = ref('')
+let alipayTimer = null
+
+async function startAlipayPay() {
+  sandboxVisible.value = true
+  sandboxStep.value = 'qr'
+  try {
+    alipayUrl.value = await fetchAlipayPagePay(orderId)
+    alipayTimer = setInterval(async () => {
+      try {
+        const paid = await fetchAlipayStatus(orderId)
+        if (paid) {
+          stopAlipayTimer()
+          sandboxStep.value = 'success'
+          setTimeout(() => {
+            sandboxVisible.value = false
+            ElMessage.success('支付宝支付成功，预付款已进入平台托管')
+            router.replace(`/orders/${orderId}`)
+          }, 1100)
+        }
+      } catch (error) {
+        // 单次查单失败静默，下一轮再试
+      }
+    }, 2000)
+  } catch (error) {
+    // 未配置 Key / 网关失败：request.js 已提示，收起弹窗退回收银台
+    sandboxVisible.value = false
+  }
+}
+
+/** 新窗口打开沙箱收银台（沙箱买家账号登录后付款） */
+function openCashier() {
+  if (alipayUrl.value) {
+    window.open(alipayUrl.value, '_blank')
+  }
+}
+
+function stopAlipayTimer() {
+  if (alipayTimer) {
+    clearInterval(alipayTimer)
+    alipayTimer = null
+  }
+}
+
+/** 弹窗关闭（含中途取消）时停掉查单轮询 */
+function onSandboxClosed() {
+  stopAlipayTimer()
+  if (sandboxStep.value !== 'success') {
+    sandboxStep.value = 'pay'
+  }
 }
 
 /** 微信沙箱：逐格填充密码后进入验证 */
@@ -237,6 +302,10 @@ function stopPinTimer() {
     clearInterval(pinTimer)
     pinTimer = null
   }
+}
+
+function stopAlipayTimerSafe() {
+  stopAlipayTimer()
 }
 
 /** 启动每秒倒计时 */
@@ -284,6 +353,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopCountdown()
   stopPinTimer()
+  stopAlipayTimer()
 })
 </script>
 
@@ -473,66 +543,96 @@ onBeforeUnmount(() => {
 
 /* ---------------- 支付沙箱弹窗 ---------------- */
 .sandbox {
-  margin: -12px 0;
+  margin: -14px 0;
+}
+
+.sandbox__close {
+  position: absolute;
+  right: 30px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.18);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.sandbox__close:hover {
+  background: rgba(255, 255, 255, 0.34);
+  color: #fff;
+  transform: translateY(-50%) scale(1.05);
 }
 
 .sandbox__bar {
-  margin: -12px -16px 0;
-  padding: 14px 18px;
+  position: relative;
+  margin: -14px -20px 0;
+  padding: 24px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: #fff;
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
-  text-align: center;
-  letter-spacing: 1px;
+  letter-spacing: 4px;
 }
 
 .sandbox__bar--wechat {
-  background: #1aad19;
-  border-radius: var(--el-dialog-border-radius) var(--el-dialog-border-radius) 0 0;
+  background: linear-gradient(135deg, #07c160 0%, #2bcf6e 100%);
 }
 
 .sandbox__bar--alipay {
-  background: #1677ff;
-  border-radius: var(--el-dialog-border-radius) var(--el-dialog-border-radius) 0 0;
+  background: linear-gradient(135deg, #1677ff 0%, #4d9fff 100%);
 }
 
 .sandbox__body {
-  padding: 26px 16px 12px;
+  padding: 30px 26px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .sandbox__merchant {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--brix-text-placeholder);
+  letter-spacing: 2px;
 }
 
 .sandbox__amount {
-  margin-top: 8px;
-  font-size: 34px;
-  font-weight: 700;
+  margin-top: 12px;
+  font-size: 42px;
+  font-weight: 600;
   color: #16181d;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 1px;
 }
 
 .sandbox__pin {
   display: flex;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 12px;
+  margin-top: 24px;
 }
 
 .sandbox__pin-cell {
-  width: 34px;
-  height: 42px;
+  width: 36px;
+  height: 46px;
   border: 1px solid var(--brix-border-strong);
-  border-radius: 6px;
+  border-radius: 8px;
   position: relative;
   transition: border-color 0.15s ease;
 }
 
 .sandbox__pin-cell.is-filled {
-  border-color: #1aad19;
+  border-color: #07c160;
 }
 
 .sandbox__pin-cell.is-filled::after {
@@ -540,18 +640,19 @@ onBeforeUnmount(() => {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: #16181d;
   transform: translate(-50%, -50%);
 }
 
 .sandbox__pin-tip {
-  margin-top: 14px;
-  font-size: 12px;
+  margin-top: 18px;
+  font-size: 13px;
   color: var(--brix-text-placeholder);
   min-height: 18px;
+  text-align: center;
 }
 
 .sandbox__channel {
@@ -559,9 +660,9 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 18px;
-  padding: 12px 14px;
-  border-radius: 10px;
+  margin-top: 20px;
+  padding: 13px 16px;
+  border-radius: 12px;
   background: #f5f7fa;
   font-size: 13px;
   color: var(--brix-text-secondary);
@@ -572,64 +673,120 @@ onBeforeUnmount(() => {
 }
 
 .sandbox__loading {
-  font-size: 34px;
+  font-size: 42px;
   color: #1677ff;
 }
 
 .sandbox__ok {
-  font-size: 52px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  color: #fff;
+  animation: ok-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .sandbox__ok--wechat {
-  color: #1aad19;
+  background: linear-gradient(135deg, #07c160 0%, #2bcf6e 100%);
+  box-shadow: 0 8px 20px rgba(7, 193, 96, 0.4);
 }
 
 .sandbox__ok--alipay {
-  color: #1677ff;
+  background: linear-gradient(135deg, #1677ff 0%, #4d9fff 100%);
+  box-shadow: 0 8px 20px rgba(22, 119, 255, 0.4);
+}
+
+@keyframes ok-pop {
+  from {
+    transform: scale(0.35);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .sandbox__ok-text {
-  margin-top: 10px;
-  font-size: 17px;
-  font-weight: 700;
+  margin-top: 14px;
+  font-size: 19px;
+  font-weight: 600;
   color: #16181d;
+  letter-spacing: 2px;
 }
 
 .sandbox__ok-sub {
-  margin-top: 4px;
-  font-size: 12px;
+  margin-top: 6px;
+  font-size: 13px;
   color: var(--brix-text-placeholder);
 }
 
+.sandbox__polling {
+  font-size: 13px;
+  color: var(--brix-text-secondary);
+}
+
 .sandbox__foot {
-  padding: 4px 24px 22px;
+  padding: 10px 26px 28px;
+  text-align: center;
 }
 
 .sandbox__btn {
   width: 100%;
-  height: 44px;
+  height: 46px;
   border: none;
-  border-radius: 10px;
+  border-radius: 23px;
   color: #fff;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: 3px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .sandbox__btn--wechat {
-  background: #1aad19;
+  background: linear-gradient(135deg, #07c160 0%, #2bcf6e 100%);
+  box-shadow: 0 6px 16px rgba(7, 193, 96, 0.35);
 }
 
 .sandbox__btn--wechat:hover {
-  background: #18b218;
+  background: linear-gradient(135deg, #0aad56 0%, #28c468 100%);
+  box-shadow: 0 8px 20px rgba(7, 193, 96, 0.45);
+  transform: translateY(-1px);
   color: #fff;
 }
 
 .sandbox__btn--alipay {
-  background: #1677ff;
+  background: linear-gradient(135deg, #1677ff 0%, #4d9fff 100%);
+  box-shadow: 0 6px 16px rgba(22, 119, 255, 0.35);
 }
 
 .sandbox__btn--alipay:hover {
-  background: #3c86ff;
+  background: linear-gradient(135deg, #0f66e6 0%, #3d8bff 100%);
+  box-shadow: 0 8px 20px rgba(22, 119, 255, 0.45);
+  transform: translateY(-1px);
   color: #fff;
+}
+</style>
+
+<style>
+/* 支付沙箱弹窗：隐藏默认头、去体内边距，让蓝色标题条顶到弹窗最上沿 */
+.sandbox-dialog.el-dialog,
+.sandbox-dialog .el-dialog {
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(9, 32, 63, 0.28);
+}
+
+.sandbox-dialog .el-dialog__header {
+  display: none;
+}
+
+.sandbox-dialog .el-dialog__body {
+  padding: 0;
 }
 </style>

@@ -43,3 +43,18 @@ export function fetchSoldOrders(params) {
 export function fetchOrderDetail(id) {
   return request.get(`/orders/${id}`)
 }
+
+/** 支付宝沙箱预下单（返回二维码码串） */
+export function precreateAlipay(id) {
+  return request.post(`/orders/${id}/alipay/precreate`)
+}
+
+/** 支付宝支付状态主动查单（true=已支付并完成流转） */
+export function fetchAlipayStatus(id) {
+  return request.get(`/orders/${id}/alipay/status`)
+}
+
+/** 支付宝电脑网站支付（page.pay）：返回沙箱收银台跳转 URL */
+export function fetchAlipayPagePay(id) {
+  return request.get(`/orders/${id}/alipay/pagepay`)
+}

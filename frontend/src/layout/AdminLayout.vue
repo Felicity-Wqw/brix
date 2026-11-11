@@ -93,7 +93,8 @@ const MENU_GROUPS = [
   {
     title: '经营概览',
     menus: [
-      { title: '数据看板', path: '/admin/dashboard', icon: 'Odometer', roles: ['OPERATOR'] }
+      { title: '数据看板', path: '/admin/dashboard', icon: 'Odometer', roles: ['OPERATOR'] },
+      { title: '数据大屏', path: '/admin/screen', icon: 'DataBoard', roles: ['OPERATOR'] }
     ]
   },
   {
@@ -102,7 +103,8 @@ const MENU_GROUPS = [
       { title: '商品审核', path: '/admin/items', icon: 'Checked', roles: ['REVIEWER'], badgeKey: 'pendingItems' },
       { title: '举报处理', path: '/admin/reports', icon: 'Warning', roles: ['REVIEWER'], badgeKey: 'pendingReports' },
       { title: '审核日志', path: '/admin/audit-logs', icon: 'Document', roles: ['REVIEWER'] },
-      { title: '小法庭裁决', path: '/admin/jury', icon: 'Stamp', roles: ['REVIEWER'], badgeKey: 'pendingJury' }
+      { title: '小法庭裁决', path: '/admin/jury', icon: 'Stamp', roles: ['REVIEWER'], badgeKey: 'pendingJury' },
+      { title: '申诉处理', path: '/admin/appeals', icon: 'ChatLineSquare', roles: ['REVIEWER'] }
     ]
   },
   {

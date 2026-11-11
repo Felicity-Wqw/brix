@@ -7,11 +7,13 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.brix.campus.common.BusinessException;
 import com.brix.campus.mapper.ChatMessageMapper;
+import com.brix.campus.mapper.ItemMapper;
 import com.brix.campus.mapper.JuryCaseMapper;
 import com.brix.campus.mapper.OrderMapper;
 import com.brix.campus.mapper.RefundMapper;
 import com.brix.campus.mapper.UserMapper;
 import com.brix.campus.model.ChatMessage;
+import com.brix.campus.model.Item;
 import com.brix.campus.model.JuryCase;
 import com.brix.campus.model.Order;
 import com.brix.campus.model.Refund;
@@ -20,10 +22,12 @@ import com.brix.campus.model.dto.RefundApplyDTO;
 import com.brix.campus.model.dto.RefundHandleDTO;
 import com.brix.campus.model.dto.RefundLogisticsDTO;
 import com.brix.campus.model.enums.OrderStatusEnum;
+import com.brix.campus.model.enums.ItemStatusEnum;
 import com.brix.campus.model.enums.RefundStatusEnum;
 import com.brix.campus.model.enums.RefundTypeEnum;
 import com.brix.campus.model.enums.TradeTypeEnum;
 import com.brix.campus.model.vo.RefundVO;
+import com.brix.campus.service.PayAlipayService;
 import com.brix.campus.service.RefundService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -62,23 +66,29 @@ public class RefundServiceImpl implements RefundService {
 
     private final RefundMapper refundMapper;
     private final OrderMapper orderMapper;
+    private final ItemMapper itemMapper;
     private final UserMapper userMapper;
     private final JuryCaseMapper juryCaseMapper;
     private final ChatMessageMapper chatMessageMapper;
     private final ObjectMapper objectMapper;
+    private final PayAlipayService payAlipayService;
 
     /** 平台系统账号 ID（懒加载缓存，迁移脚本保证存在） */
     private volatile Long platformUserId;
 
     public RefundServiceImpl(RefundMapper refundMapper, OrderMapper orderMapper,
+                             ItemMapper itemMapper,
                              UserMapper userMapper, JuryCaseMapper juryCaseMapper,
-                             ChatMessageMapper chatMessageMapper, ObjectMapper objectMapper) {
+                             ChatMessageMapper chatMessageMapper, ObjectMapper objectMapper,
+                             PayAlipayService payAlipayService) {
         this.refundMapper = refundMapper;
         this.orderMapper = orderMapper;
+        this.itemMapper = itemMapper;
         this.userMapper = userMapper;
         this.juryCaseMapper = juryCaseMapper;
         this.chatMessageMapper = chatMessageMapper;
         this.objectMapper = objectMapper;
+        this.payAlipayService = payAlipayService;
     }
 
     // ================================ 买家 ================================
@@ -258,7 +268,7 @@ public class RefundServiceImpl implements RefundService {
             Refund updated = getEntity(refundId);
             if (directRefund) {
                 markOrderRefunded(refund.getOrderId());
-                notifyBoth(updated, "卖家已同意退款，退款已完成（金额 ¥" + updated.getAmount() + "）。");
+                notifyBoth(updated, "卖家已同意退款，退款已完成（金额 ¥" + updated.getAmount() + "），商品已自动恢复在售。");
             } else {
                 notifyBoth(updated, "卖家已同意退货退款，请买家在 7 日内寄回商品并填写运单号。"
                         + (reply.isEmpty() ? "" : "卖家备注：" + reply));
@@ -302,7 +312,7 @@ public class RefundServiceImpl implements RefundService {
         }
         markOrderRefunded(refund.getOrderId());
         Refund updated = getEntity(refundId);
-        notifyBoth(updated, "卖家已确认收到退货，退款已完成（金额 ¥" + updated.getAmount() + "）。");
+        notifyBoth(updated, "卖家已确认收到退货，退款已完成（金额 ¥" + updated.getAmount() + "），商品已自动恢复在售。");
         return toVO(updated, sellerId);
     }
 
@@ -353,7 +363,7 @@ public class RefundServiceImpl implements RefundService {
                 markOrderRefunded(refund.getOrderId());
             }
             notifyBoth(getEntity(refund.getId()),
-                    "卖家 36 小时内未处理售后，系统已按平台规则自动同意退款。");
+                    "卖家 36 小时内未处理售后，系统已按平台规则自动同意退款，商品已恢复在售。");
         }
         return overdue.size();
     }
@@ -485,9 +495,54 @@ public class RefundServiceImpl implements RefundService {
      * 退款收尾时同步回写订单 refund_time（资金链路闭环：托管语义上已原路退回）。
      */
     private void markOrderRefunded(Long orderId) {
+        Order order = orderMapper.selectById(orderId);
         orderMapper.update(null, Wrappers.<Order>lambdaUpdate()
                 .eq(Order::getId, orderId)
                 .set(Order::getRefundTime, LocalDateTime.now()));
+        restoreItemOnSale(order);
+        executeRealRefundIfAlipay(orderId);
+    }
+
+    /**
+     * 退款收口时商品自动恢复在售（对齐主流二手平台语义）：
+     * 交易未达成，商品回到市场，卖家无需手动重新上架。
+     * 条件更新只针对 SOLD 态——若卖家已自行处理（下架/删除）则不覆盖。
+     */
+    private void restoreItemOnSale(Order order) {
+        if (order == null) {
+            return;
+        }
+        int rows = itemMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Item>()
+                .eq(Item::getId, order.getItemId())
+                .eq(Item::getStatus, ItemStatusEnum.SOLD.getCode())
+                .set(Item::getStatus, ItemStatusEnum.ON_SALE.getCode())
+                .set(Item::getUpdatedAt, LocalDateTime.now()));
+        if (rows > 0) {
+            log.info("退款收口：商品已自动恢复在售（itemId={}）", order.getItemId());
+        }
+    }
+
+    /**
+     * 真实资金退款（功能完整性）：订单经支付宝沙箱真实付款（pay_method=ALIPAY）时，
+     * 退款收口必须调 alipay.trade.refund 原路退回，否则状态与资金脱节。
+     * 历史模拟支付订单（pay_method=WECHAT 或 NULL）资金本就未真实流转，跳过。
+     * 失败抛异常 → 调用方事务回滚，售后状态保持原状可重试（不虚报「已退款」）。
+     */
+    private void executeRealRefundIfAlipay(Long orderId) {
+        Order order = orderMapper.selectById(orderId);
+        if (order == null || !"ALIPAY".equals(order.getPayMethod())) {
+            return;
+        }
+        Refund refund = findOngoingByOrder(orderId);
+        if (refund == null) {
+            refund = refundMapper.selectList(Wrappers.<Refund>lambdaQuery()
+                    .eq(Refund::getOrderId, orderId)
+                    .orderByDesc(Refund::getId).last("LIMIT 1")).stream().findFirst().orElse(null);
+        }
+        if (refund == null) {
+            return;
+        }
+        payAlipayService.refundOrder(orderId, order.getAmount(), "BRIXRF" + refund.getId());
     }
 
     private void ensureReviseWindowOpen(Refund refund) {

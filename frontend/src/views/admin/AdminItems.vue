@@ -166,9 +166,18 @@
                 </p>
               </div>
               <div class="gates__card">
-                <p class="gates__label">第二道闸 · AI</p>
+                <p class="gates__label">第二道闸 · AI（含图片）</p>
                 <p class="gates__value">{{ log.gate2ResultDesc }}</p>
                 <p v-if="log.gate2Reason" class="gates__extra">{{ log.gate2Reason }}</p>
+                <div v-if="imageFindings(log).length" class="gates__images">
+                  <div v-for="f in imageFindings(log)" :key="f.url + f.index" class="gates__image">
+                    <el-image :src="resolveImage(f.url)" fit="cover" class="gates__image-thumb"
+                              :preview-src-list="[resolveImage(f.url)]" preview-teleported />
+                    <span class="gates__image-badge"
+                          :class="`imgv--${(f.verdict || '').toLowerCase()}`"
+                          :title="f.reason || ''">{{ imageVerdictLabel(f.verdict) }}</span>
+                  </div>
+                </div>
               </div>
             </div>
             <p class="gates__foot">
@@ -253,6 +262,26 @@ import {
 } from '@/api/admin'
 import { formatTime, resolveImage } from '@/utils/format'
 import StatusTag from '@/components/StatusTag.vue'
+
+/** 解析审核日志里的逐图审核明细（gate2_findings JSON） */
+function imageFindings(log) {
+  if (!log?.imageFindingsJson) return []
+  try {
+    return JSON.parse(log.imageFindingsJson)
+  } catch (error) {
+    return []
+  }
+}
+
+function imageVerdictLabel(verdict) {
+  switch (verdict) {
+    case 'PASS': return '通过'
+    case 'REJECT': return '违规'
+    case 'UNCERTAIN': return '存疑'
+    case 'FAILED': return '未审'
+    default: return verdict || ''
+  }
+}
 
 /**
  * 页签表：把「状态过滤」和「排序口径」一起描述，避免两处各写一份条件而对不上。
@@ -769,4 +798,44 @@ onMounted(load)
   line-height: 1.7;
   color: #8d99a8;
 }
+
+/* ---------------- 图片审核明细（gate2_findings） ---------------- */
+.gates__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.gates__image {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 0.5px solid var(--brix-border);
+}
+
+.gates__image-thumb {
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.gates__image-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 11px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.imgv--pass { background: rgba(16, 128, 90, 0.85); }
+.imgv--reject { background: rgba(192, 45, 45, 0.9); }
+.imgv--uncertain { background: rgba(176, 106, 20, 0.9); }
+.imgv--failed { background: rgba(95, 94, 90, 0.85); }
+
 </style>

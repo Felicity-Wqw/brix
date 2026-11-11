@@ -4,6 +4,7 @@ import com.brix.campus.common.R;
 import com.brix.campus.model.JuryCase;
 import com.brix.campus.model.enums.JuryStageEnum;
 import com.brix.campus.model.vo.AdminDashboardVO;
+import com.brix.campus.model.vo.AdminScreenVO;
 import com.brix.campus.service.AdminDashboardService;
 import com.brix.campus.service.ItemService;
 import com.brix.campus.service.ReportService;
@@ -57,6 +58,27 @@ public class AdminDashboardController {
     @GetMapping("/dashboard/overview")
     public R<AdminDashboardVO> overview(@RequestParam(value = "days", defaultValue = "7") int days) {
         return R.ok(dashboardService.load(days));
+    }
+
+    /**
+     * AI 运营数据分析报告（周 / 月 / 季度三周期复用）。
+     *
+     * @param days 统计周期：7=周报、30=月报、90=季度汇报
+     * @return 报告正文
+     */
+    @GetMapping("/dashboard/ai-report")
+    public R<String> aiReport(@RequestParam(value = "days", defaultValue = "7") int days) {
+        return R.ok(dashboardService.aiReport(days), "报告已生成");
+    }
+
+    /**
+     * 数据可视化大屏聚合数据（30 秒轮询；口径与 overview 一致 + AI 统计与实时动态）。
+     *
+     * @return 大屏全量数据
+     */
+    @GetMapping("/dashboard/screen")
+    public R<AdminScreenVO> screen() {
+        return R.ok(dashboardService.screen());
     }
 
     /**

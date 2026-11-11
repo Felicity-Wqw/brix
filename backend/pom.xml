@@ -109,6 +109,13 @@
       <artifactId>langchain4j</artifactId>
       <version>${langchain4j.version}</version>
     </dependency>
+
+    <!-- 支付宝沙箱支付（官方 SDK；未配置沙箱 APPID 时相关 Bean 不装配，零影响） -->
+    <dependency>
+      <groupId>com.alipay.sdk</groupId>
+      <artifactId>alipay-sdk-java</artifactId>
+      <version>4.38.200.ALL</version>
+    </dependency>
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-open-ai</artifactId>

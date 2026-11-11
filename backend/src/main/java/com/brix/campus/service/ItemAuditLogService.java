@@ -26,7 +26,15 @@ public interface ItemAuditLogService {
      * @param item     已完成状态落库的商品实体（需含 id / sellerId / 标题 / 价格 / 首图）
      * @param decision 审核结论（含两道闸明细）
      */
-    void record(Item item, AuditDecision decision);
+    Long record(Item item, AuditDecision decision);
+
+    /**
+     * 黑名单命中场景的 AI 复核补档：覆盖指定日志行的 AI 闸四列（gate2_result/verdict/reason/suggestion）。
+     *
+     * @param logId 审核日志行 ID
+     * @param gate2 补档后的 AI 闸结论
+     */
+    void updateGate2(Long logId, AuditDecision.Gate2 gate2);
 
     /**
      * 分页查询审核日志。

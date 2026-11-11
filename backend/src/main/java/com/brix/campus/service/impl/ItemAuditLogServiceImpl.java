@@ -62,13 +62,16 @@ public class ItemAuditLogServiceImpl extends ServiceImpl<ItemAuditLogMapper, Ite
     private final CategoryMapper categoryMapper;
     private final UserMapper userMapper;
     private final SchoolService schoolService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public ItemAuditLogServiceImpl(CategoryMapper categoryMapper,
                                    UserMapper userMapper,
-                                   SchoolService schoolService) {
+                                   SchoolService schoolService,
+                                   com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.categoryMapper = categoryMapper;
         this.userMapper = userMapper;
         this.schoolService = schoolService;
+        this.objectMapper = objectMapper;
     }
 
     // ========================================================================
@@ -76,9 +79,9 @@ public class ItemAuditLogServiceImpl extends ServiceImpl<ItemAuditLogMapper, Ite
     // ========================================================================
 
     @Override
-    public void record(Item item, AuditDecision decision) {
+    public Long record(Item item, AuditDecision decision) {
         if (item == null || item.getId() == null || decision == null) {
-            return;
+            return null;
         }
         try {
             AuditDecision.Gate1 gate1 = decision.gate1() == null
@@ -115,6 +118,7 @@ public class ItemAuditLogServiceImpl extends ServiceImpl<ItemAuditLogMapper, Ite
             entity.setRiskLevel(level.getCode());
             entity.setDecisionStatus(item.getStatus() == null ? level.getInitialStatus() : item.getStatus());
             entity.setDecisionNote(trim(decisionNoteOf(decision), MAX_NOTE));
+            entity.setGate2Findings(serializeFindings(gate2.imageFindings()));
 
             entity.setCreatedAt(LocalDateTime.now());
             // 该商品此前若有「待人工审核」的历史记录，本次审核已产生新结论：
@@ -122,12 +126,45 @@ public class ItemAuditLogServiceImpl extends ServiceImpl<ItemAuditLogMapper, Ite
             // 出现「日志里有待审、审核队列却是空的」的口径错位。日志内容仍是 append-only 证据，只改处置状态。
             supersedePending(item.getId());
             save(entity);
+            return entity.getId();
         } catch (Exception e) {
             // 审核留痕是「事后证据」，不是发布的前置条件：写日志失败不能让卖家发不出商品。
             // 但必须 ERROR 告警——事故排查时要能发现证据链断过。
             // 【兜底】t_item 上仍保留 risk_level / audit_source / audit_reason，可反查最近一次判定。
             log.error("审核日志写入失败（itemId={}，risk={}）：{}",
                     item.getId(), decision.level(), e.getMessage(), e);
+        }
+        return null;
+    }
+
+    @Override
+    public void updateGate2(Long logId, AuditDecision.Gate2 gate2) {
+        if (logId == null || gate2 == null) {
+            return;
+        }
+        ItemAuditLog row = getById(logId);
+        if (row == null) {
+            return;
+        }
+        row.setGate2Result(gate2.result());
+        row.setGate2Verdict(gate2.verdict());
+        row.setGate2Reason(trim(gate2.reason(), MAX_NOTE));
+        row.setGate2Findings(serializeFindings(gate2.imageFindings()));
+        updateById(row);
+    }
+
+    /**
+     * 逐图审核明细序列化；无明细返回 null（列保持 NULL，与历史数据一致）。
+     */
+    private String serializeFindings(List<AuditDecision.ImageFinding> findings) {
+        if (findings == null || findings.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(findings);
+        } catch (Exception e) {
+            log.warn("逐图审核明细序列化失败：{}", e.getMessage());
+            return null;
         }
     }
 
@@ -362,6 +399,7 @@ public class ItemAuditLogServiceImpl extends ServiceImpl<ItemAuditLogMapper, Ite
             vo.setGate2ResultDesc(gate2DescOf(entity.getGate2Result()));
             vo.setGate2Verdict(entity.getGate2Verdict());
             vo.setGate2Reason(entity.getGate2Reason());
+            vo.setImageFindingsJson(entity.getGate2Findings());
             vo.setRiskLevel(entity.getRiskLevel());
             vo.setRiskLevelDesc(RiskLevelEnum.descOf(entity.getRiskLevel()));
             vo.setDecisionStatus(entity.getDecisionStatus());

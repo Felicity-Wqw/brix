@@ -23,6 +23,11 @@ export function fetchDashboard(days = 7) {
   return request.get('/admin/dashboard/overview', { params: { days } })
 }
 
+/** AI 运营数据分析报告（days: 7=周报 / 30=月报 / 90=季度汇报） */
+export function fetchAiReport(days = 7) {
+  return request.get('/admin/dashboard/ai-report', { params: { days } })
+}
+
 /** 商品审核队列 / 检索 */
 export function fetchAdminItems(params) {
   return request.get('/admin/items', { params })
@@ -98,4 +103,9 @@ export function deleteAnnouncement(id) {
 /** 用户侧公告（首页轮播，游客可读） */
 export function fetchAnnouncements() {
   return request.get('/announcements')
+}
+
+/** 数据可视化大屏聚合数据（30s 轮询） */
+export function fetchScreen() {
+  return request.get('/admin/dashboard/screen')
 }

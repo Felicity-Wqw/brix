@@ -68,4 +68,12 @@ public class JuryCase extends BaseEntity {
     /** 裁决时间 */
     @TableField("ruled_at")
     private LocalDateTime ruledAt;
+
+    /** AI 预审参考 JSON（争议焦点/证据摘要/倾向），举证期结束进入投票期时生成；AI 不可用为 null */
+    @TableField("ai_preview")
+    private String aiPreview;
+
+    /** AI 预审生成时间 */
+    @TableField("ai_previewed_at")
+    private LocalDateTime aiPreviewedAt;
 }

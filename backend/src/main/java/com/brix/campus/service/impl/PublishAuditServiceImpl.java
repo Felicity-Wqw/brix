@@ -5,14 +5,19 @@ import com.brix.campus.ai.AuditVerdict;
 import com.brix.campus.ai.ItemAuditAgent;
 import com.brix.campus.model.dto.AuditDecision;
 import com.brix.campus.model.enums.RiskLevelEnum;
+import com.brix.campus.service.ImageAuditService;
+import com.brix.campus.service.ItemAuditLogService;
 import com.brix.campus.service.PublishAuditService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,13 +79,28 @@ public class PublishAuditServiceImpl implements PublishAuditService {
     private static final int COMPACT_MIN_LENGTH = 4;
 
     private final ObjectProvider<ItemAuditAgent> auditAgentProvider;
+    private final ImageAuditService imageAuditService;
+    private final ItemAuditLogService itemAuditLogService;
 
-    public PublishAuditServiceImpl(ObjectProvider<ItemAuditAgent> auditAgentProvider) {
+    /** 黑名单命中 AI 复核补档：单线程后台执行 */
+    private final java.util.concurrent.ExecutorService backfillExecutor =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                Thread thread = new Thread(r, "audit-backfill");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    public PublishAuditServiceImpl(ObjectProvider<ItemAuditAgent> auditAgentProvider,
+                                   ImageAuditService imageAuditService,
+                                   ItemAuditLogService itemAuditLogService) {
         this.auditAgentProvider = auditAgentProvider;
+        this.imageAuditService = imageAuditService;
+        this.itemAuditLogService = itemAuditLogService;
     }
 
     @Override
-    public AuditDecision judge(String title, String description, String categoryName, BigDecimal price) {
+    public AuditDecision judge(String title, String description, String categoryName, BigDecimal price,
+                               List<String> imageUrls) {
         // 三种文本形态参与匹配：原文（摘录/豁免判断）、去空白（拦「代 开 发 票」）、紧凑（拦「代开·发票」）
         String rawLower = (safe(title) + "\n" + safe(description)).toLowerCase(Locale.ROOT);
         String noSpace = normalizeForm(rawLower, false);
@@ -89,8 +109,22 @@ public class PublishAuditServiceImpl implements PublishAuditService {
         // ---------------- 第一道闸：关键词 ----------------
         AuditDecision.Gate1 gate1 = scanKeywords(rawLower, noSpace, compact);
 
-        // ---------------- 第二道闸：AI（始终执行，用于留痕；结论取严） ----------------
-        AuditDecision.Gate2 gate2 = scanByAi(title, description, categoryName);
+        // ---------------- 第二道闸：AI（文本结论 + 图片结论取严合并成一条） ----------------
+        boolean blacklist = gate1.hitBlack();
+        AuditDecision.Gate2 textGate2;
+        if (blacklist) {
+            // 黑名单词闸结论已足以定高危，AI 复核不再阻塞发布，转后台异步补档（文本优化第 3 条）
+            textGate2 = new AuditDecision.Gate2(
+                    AuditDecision.Gate2.UNAVAILABLE, "PENDING_BACKFILL",
+                    "命中黑名单关键词「" + gate1.hitWord() + "」，已直接拦截；AI 复核将在后台补档", null, null);
+        } else {
+            textGate2 = scanByAi(title, description, categoryName);
+        }
+
+        // 图片结论并入：读上传阶段的缓存，未完成的图同步补审（受 10s 总限约束）
+        List<AuditDecision.ImageFinding> findings =
+                imageAuditService.findingsFor(imageUrls == null ? List.of() : imageUrls);
+        AuditDecision.Gate2 gate2 = mergeGate2(textGate2, findings);
 
         // 两道闸各自定级，取更严者
         RiskLevelEnum level = stricter(levelOfGate1(gate1), levelOfGate2(gate2));
@@ -118,6 +152,135 @@ public class PublishAuditServiceImpl implements PublishAuditService {
                 level.getCode(), gate1.result(),
                 gate1.hitWord() == null ? "-" : gate1.hitWord(), gate2.result(), gate2.verdict());
         return decision;
+    }
+
+    @Override
+    public void afterAuditLogged(AuditDecision decision, Long logId, com.brix.campus.model.Item item,
+                                 String categoryName) {
+        if (logId == null || decision == null || decision.gate2() == null) {
+            return;
+        }
+        AuditDecision.Gate2 gate2 = decision.gate2();
+        if (!AuditDecision.Gate2.UNAVAILABLE.equals(gate2.result())
+                || !"PENDING_BACKFILL".equals(gate2.verdict())) {
+            return;
+        }
+        Runnable task = () -> {
+            try {
+                AuditDecision.Gate2 backfilled = scanByAi(item.getTitle(), item.getDescription(), categoryName);
+                itemAuditLogService.updateGate2(logId, backfilled);
+                log.info("黑名单命中补档完成：logId={}，gate2={}", logId, backfilled.result());
+            } catch (Exception e) {
+                log.warn("黑名单命中 AI 复核补档失败（logId={}）：{}", logId, e.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            // 发布事务提交后再补档，避免后台任务读不到未提交的日志行
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    backfillExecutor.submit(task);
+                }
+            });
+        } else {
+            backfillExecutor.submit(task);
+        }
+    }
+
+    /**
+     * 文本结论与图片结论合并成一条 gate2：判定取严、理由拼接、逐图明细随结论携带。
+     *
+     * @param text     文本 AI 闸结论（可为 UNAVAILABLE）
+     * @param findings 逐图结论；null 表示图片闸未启用（无视觉 Key）或无图
+     * @return 合并后的 gate2
+     */
+    private AuditDecision.Gate2 mergeGate2(AuditDecision.Gate2 text,
+                                           List<AuditDecision.ImageFinding> findings) {
+        if (findings == null || findings.isEmpty()) {
+            return text;
+        }
+        boolean imageReject = findings.stream()
+                .anyMatch(f -> AuditDecision.ImageFinding.REJECT.equals(f.verdict()));
+        boolean imageUncertain = findings.stream()
+                .anyMatch(f -> AuditDecision.ImageFinding.UNCERTAIN.equals(f.verdict()));
+
+        int imageSeverity = imageReject ? 2 : imageUncertain ? 1 : 0;
+        int textSeverity = text.isBan() ? 2 : text.isUncertain() ? 1 : 0;
+        int severity = Math.max(imageSeverity, textSeverity);
+
+        String verdict;
+        if (text.isBan() || text.isUncertain()) {
+            verdict = text.verdict();
+        } else if (imageReject) {
+            verdict = "IMAGE_REJECT";
+        } else if (imageUncertain) {
+            verdict = "IMAGE_UNCERTAIN";
+        } else {
+            verdict = text.verdict();
+        }
+
+        String result = severity == 2 ? AuditDecision.Gate2.BAN
+                : severity == 1 ? AuditDecision.Gate2.UNCERTAIN
+                : AuditDecision.Gate2.UNAVAILABLE.equals(text.result())
+                        ? AuditDecision.Gate2.UNAVAILABLE : AuditDecision.Gate2.PASS;
+
+        String mergedReason = joinReasons(text.reason(), summarizeImages(findings));
+        String suggestion = text.suggestion();
+        if (isBlank(suggestion)) {
+            if (imageReject) {
+                suggestion = "请更换违规图片后重试";
+            } else if (imageUncertain) {
+                suggestion = "图片存在疑似违规内容，请等待人工复核";
+            }
+        }
+        return new AuditDecision.Gate2(result, verdict, mergedReason, suggestion, findings);
+    }
+
+    /**
+     * 汇总逐图结论为人读的一段话：违规与存疑逐条列出，未审数量注明。
+     */
+    private String summarizeImages(List<AuditDecision.ImageFinding> findings) {
+        List<String> rejects = new ArrayList<>();
+        List<String> uncertains = new ArrayList<>();
+        int failed = 0;
+        for (AuditDecision.ImageFinding finding : findings) {
+            switch (finding.verdict()) {
+                case AuditDecision.ImageFinding.REJECT ->
+                        rejects.add("图" + finding.index() + "：" + safe(finding.reason()));
+                case AuditDecision.ImageFinding.UNCERTAIN ->
+                        uncertains.add("图" + finding.index() + "：" + safe(finding.reason()));
+                case AuditDecision.ImageFinding.FAILED -> failed++;
+                default -> { }
+            }
+        }
+        StringBuilder sb = new StringBuilder("图片审核 ").append(findings.size()).append(" 张：");
+        if (rejects.isEmpty() && uncertains.isEmpty() && failed == 0) {
+            sb.append("全部通过");
+            return sb.toString();
+        }
+        if (!rejects.isEmpty()) {
+            sb.append("违规：").append(String.join("；", rejects));
+        }
+        if (!uncertains.isEmpty()) {
+            if (!rejects.isEmpty()) {
+                sb.append("；");
+            }
+            sb.append("存疑转人工：").append(String.join("；", uncertains));
+        }
+        if (failed > 0) {
+            sb.append("（").append(failed).append(" 张未完成审核，已跳过）");
+        }
+        return sb.toString();
+    }
+
+    private String joinReasons(String textReason, String imageSummary) {
+        if (isBlank(textReason)) {
+            return imageSummary;
+        }
+        if (isBlank(imageSummary)) {
+            return textReason;
+        }
+        return textReason + "；" + imageSummary;
     }
 
     // ========================================================================

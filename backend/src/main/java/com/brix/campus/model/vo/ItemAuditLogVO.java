@@ -85,6 +85,9 @@ public class ItemAuditLogVO implements Serializable {
     /** AI 给出的理由 */
     private String gate2Reason;
 
+    /** 逐图审核明细 JSON：[{index,url,verdict,reason}]（无图片审核为 null） */
+    private String imageFindingsJson;
+
     // ---------------------- 结论 ----------------------
 
     /** 风险级别码 */

@@ -60,6 +60,23 @@
       </article>
     </div>
 
+    <!-- AI 运营分析报告 -->
+    <section class="panel">
+      <header class="panel__head">
+        <h3 class="panel__title">AI 运营分析报告</h3>
+        <div class="dash__tabs">
+          <button v-for="opt in REPORT_PERIODS" :key="opt.value" type="button"
+                  class="dash__tab" :class="{ 'dash__tab--active': reportDays === opt.value }"
+                  @click="generateReport(opt.value)">
+            {{ opt.label }}
+          </button>
+        </div>
+      </header>
+      <p v-if="reportLoading" class="report__loading">AI 正在生成报告…</p>
+      <p v-else-if="report" class="report__body">{{ report }}</p>
+      <p v-else class="report__loading">点击上方「周报 / 月报 / 季度汇报」生成对应周期的 AI 分析报告</p>
+    </section>
+
     <!-- 成交趋势 -->
     <section class="panel">
       <header class="panel__head">
@@ -141,7 +158,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
-import { fetchDashboard } from '@/api/admin'
+import { fetchDashboard, fetchAiReport } from '@/api/admin'
 import AdminTrendChart from '@/components/charts/AdminTrendChart.vue'
 import AdminSchoolChart from '@/components/charts/AdminSchoolChart.vue'
 import PieCategory from '@/components/charts/PieCategory.vue'
@@ -150,6 +167,29 @@ const PERIODS = [
   { label: '近 7 天', value: 7 },
   { label: '近 30 天', value: 30 }
 ]
+
+const REPORT_PERIODS = [
+  { label: '周报', value: 7 },
+  { label: '月报', value: 30 },
+  { label: '季度汇报', value: 90 }
+]
+
+const reportDays = ref(7)
+const report = ref('')
+const reportLoading = ref(false)
+
+async function generateReport(value) {
+  reportDays.value = value
+  reportLoading.value = true
+  report.value = ''
+  try {
+    report.value = await fetchAiReport(value)
+  } catch (error) {
+    /* 拦截器已提示 */
+  } finally {
+    reportLoading.value = false
+  }
+}
 
 const loading = ref(false)
 const days = ref(7)
@@ -488,5 +528,19 @@ onMounted(load)
   font-size: 11.5px;
   line-height: 1.8;
   color: #9aa5b3;
+}
+
+.report__loading {
+  margin: 0;
+  font-size: 13px;
+  color: #9aa5b3;
+}
+
+.report__body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.9;
+  white-space: pre-wrap;
+  color: #2c2c2a;
 }
 </style>

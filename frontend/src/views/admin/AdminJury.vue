@@ -75,6 +75,22 @@
           <p class="detail-head__reason">纠纷事由（{{ detail.initiator === 'BUYER' ? '买家' : '卖家' }}发起）：{{ detail.reason }}</p>
         </div>
 
+        <div class="ai-preview" v-if="preview">
+          <p class="ai-preview__head">
+            <span class="ai-preview__title">AI 预审参考</span>
+            <el-tag size="small" type="info" effect="plain">仅供参考，不影响计票</el-tag>
+            <el-tag size="small" effect="plain" :type="preview.lean === 'NEUTRAL' ? 'info' : 'warning'">
+              {{ preview.lean === 'BUYER' ? '倾向买家' : preview.lean === 'SELLER' ? '倾向卖家' : '倾向中立' }}
+            </el-tag>
+          </p>
+          <ul class="ai-preview__points">
+            <li v-for="(p, i) in preview.disputedPoints" :key="i">{{ p }}</li>
+          </ul>
+          <p class="ai-preview__summary"><strong>买方证据摘要：</strong>{{ preview.buyerSummary }}</p>
+          <p class="ai-preview__summary"><strong>卖方证据摘要：</strong>{{ preview.sellerSummary }}</p>
+          <p class="ai-preview__reason">{{ preview.leanReason }}</p>
+        </div>
+
         <div class="evidence">
           <p class="evidence__title">双方证据（{{ detail.evidences?.length || 0 }} 条）</p>
           <div v-for="(ev, i) in detail.evidences" :key="i" class="evidence__item">
@@ -113,11 +129,16 @@
             </div>
           </div>
 
+          <div class="ruling-draft" v-if="detail.status === 'PENDING_RULING'">
+            <el-button size="small" :loading="drafting" @click="generateDraft">
+              AI 起草裁决理由（按陪审多数方向）
+            </el-button>
+          </div>
           <el-input
             v-model="ruling.reason"
             type="textarea" :rows="3" maxlength="300" show-word-limit
-            placeholder="裁决理由（必填，将随结果通知买卖双方）"
-            style="margin-top: 14px"
+            placeholder="裁决理由（必填，将随结果通知买卖双方；可用上方 AI 草稿）"
+            style="margin-top: 10px"
           />
           <div class="verdict__actions">
             <el-button type="primary" :loading="ruling.loading" @click="confirmRule('BUYER')">裁决支持买家（执行退款）</el-button>
@@ -130,9 +151,9 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchPendingJuryCases, fetchAdminJuryCaseDetail, ruleJuryCase } from '@/api/jury'
+import { fetchPendingJuryCases, fetchAdminJuryCaseDetail, ruleJuryCase, draftJuryRuling } from '@/api/jury'
 import { formatTime, resolveImage } from '@/utils/format'
 
 const loading = ref(false)
@@ -184,6 +205,39 @@ async function confirmRule(result) {
     /* 拦截器已提示 */
   } finally {
     ruling.loading = false
+  }
+}
+
+/** AI 预审参考（JSON 落库，解析失败不展示卡片） */
+const preview = computed(() => {
+  const raw = detail.value?.aiPreview
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed?.lean ? parsed : null
+  } catch {
+    return null
+  }
+})
+
+const drafting = ref(false)
+
+/** AI 起草裁决理由：方向取陪审多数票（票数相同取 AI 预审倾向），草稿填充编辑框供人工修改 */
+async function generateDraft() {
+  drafting.value = true
+  try {
+    const { voteBuyer = 0, voteSeller = 0 } = detail.value
+    let direction = voteBuyer >= voteSeller ? 'BUYER' : 'SELLER'
+    if (voteBuyer === voteSeller && preview.value?.lean && preview.value.lean !== 'NEUTRAL') {
+      direction = preview.value.lean
+    }
+    const draft = await draftJuryRuling(detail.value.id, direction)
+    ruling.reason = String(draft || '').slice(0, 300)
+    ElMessage.success('草稿已填充，请确认或修改后提交裁决')
+  } catch (error) {
+    /* 拦截器已提示 */
+  } finally {
+    drafting.value = false
   }
 }
 
@@ -388,5 +442,48 @@ onMounted(load)
   display: flex;
   justify-content: center;
   gap: 12px;
+}
+
+.ai-preview {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 0.5px dashed #9fe1cb;
+  border-radius: 10px;
+  background: #f2faf7;
+}
+
+.ai-preview__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.ai-preview__title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f6e56;
+}
+
+.ai-preview__points {
+  margin: 0 0 8px;
+  padding-left: 16px;
+  list-style: decimal;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #2c2c2a;
+}
+
+.ai-preview__summary {
+  margin: 4px 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #444441;
+}
+
+.ai-preview__reason {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #5f5e5a;
 }
 </style>

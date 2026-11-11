@@ -113,7 +113,7 @@
         </el-form-item>
 
         <el-form-item label="商品图片">
-          <ImageUploader v-model="form.images" :max="MAX_ITEM_IMAGES" biz-type="item" />
+          <ImageUploader ref="uploaderRef" v-model="form.images" :max="MAX_ITEM_IMAGES" biz-type="item" />
         </el-form-item>
 
         <el-form-item label="描述" prop="description">
@@ -172,6 +172,7 @@ const editId = typeof route.query.id === 'string' && route.query.id ? route.quer
 const isEdit = computed(() => !!editId)
 
 const formRef = ref(null)
+const uploaderRef = ref(null)
 const submitting = ref(false)
 const categories = ref([])
 /** 学校字典（含校区），学校/校区两级联动用 */
@@ -281,6 +282,10 @@ async function submit() {
   try {
     await formRef.value.validate()
   } catch (error) {
+    return
+  }
+  if (uploaderRef.value?.hasRejectedImage?.()) {
+    ElMessage.error('存在未通过 AI 审核的图片，请更换后再发布')
     return
   }
   const payload = {

@@ -90,4 +90,26 @@ public interface JuryService {
      * @param dto     裁决结果与理由
      */
     void ruling(Long adminId, Long caseId, AdminRulingDTO dto);
+
+    /**
+     * 平台 AI 生成案件预审参考（争议焦点 / 双方证据摘要 / 倾向），
+     * 落库 {@code t_jury_case.ai_preview}，仅供陪审员参考，不参与计票与裁决。
+     *
+     * <p>幂等：已生成过（ai_previewed_at 非空）直接返回 false；
+     * 举证期尚未结束的案件不生成；AI 不可用或调用失败时静默返回 false。</p>
+     *
+     * @param caseId 案件 ID
+     * @return 是否成功生成
+     */
+    boolean generateAiPreview(Long caseId);
+
+    /**
+     * 平台 AI 按裁决方向起草裁决理由（供审核员编辑确认，不直接发布、不落库）。
+     * AI 不可用或生成失败时抛业务异常，由前端提示改手写。
+     *
+     * @param caseId 案件 ID
+     * @param result 裁决方向 BUYER / SELLER
+     * @return 裁决理由正文
+     */
+    String draftRuling(Long caseId, String result);
 }

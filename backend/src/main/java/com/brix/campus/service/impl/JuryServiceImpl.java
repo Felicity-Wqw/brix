@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.brix.campus.ai.AiPrompts;
+import com.brix.campus.ai.JuryAdvisorAgent;
+import com.brix.campus.ai.JuryPreviewResult;
 import com.brix.campus.common.BusinessException;
 import com.brix.campus.mapper.ChatMessageMapper;
 import com.brix.campus.mapper.JuryCaseMapper;
@@ -32,6 +35,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,11 +80,15 @@ public class JuryServiceImpl implements JuryService {
 
     private volatile Long platformUserId;
 
+    /** 小法庭预审智能体（无 Key 时不装配，getIfAvailable 返回 null，预审静默跳过） */
+    private final ObjectProvider<JuryAdvisorAgent> advisorProvider;
+
     public JuryServiceImpl(JuryCaseMapper juryCaseMapper, JuryEvidenceMapper juryEvidenceMapper,
                            JuryVoteMapper juryVoteMapper, RefundMapper refundMapper,
                            OrderMapper orderMapper, UserMapper userMapper,
                            ChatMessageMapper chatMessageMapper, RefundService refundService,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           ObjectProvider<JuryAdvisorAgent> advisorProvider) {
         this.juryCaseMapper = juryCaseMapper;
         this.juryEvidenceMapper = juryEvidenceMapper;
         this.juryVoteMapper = juryVoteMapper;
@@ -90,6 +98,7 @@ public class JuryServiceImpl implements JuryService {
         this.chatMessageMapper = chatMessageMapper;
         this.refundService = refundService;
         this.objectMapper = objectMapper;
+        this.advisorProvider = advisorProvider;
     }
 
     // ================================ 建案与举证 ================================
@@ -240,6 +249,7 @@ public class JuryServiceImpl implements JuryService {
                 .eq(JuryCase::getStatus, JuryStageEnum.EVIDENCE.getCode())
                 .apply("evidence_deadline < {0}", LocalDateTime.now())
                 .last("LIMIT 100"));
+        List<Long> transferredIds = new ArrayList<>();
         for (JuryCase juryCase : overdue) {
             int rows = juryCaseMapper.update(null, Wrappers.<JuryCase>lambdaUpdate()
                     .eq(JuryCase::getId, juryCase.getId())
@@ -251,6 +261,15 @@ public class JuryServiceImpl implements JuryService {
                         .eq(Refund::getStatus, RefundStatusEnum.JURY_EVIDENCE.getCode())
                         .set(Refund::getStatus, RefundStatusEnum.JURY_VOTING.getCode()));
                 notifyBoth(juryCase, "举证期已结束，案件进入小法庭陪审期，平台用户投票 48 小时后由平台终审。");
+                transferredIds.add(juryCase.getId());
+            }
+        }
+        // 进入陪审期后生成 AI 预审参考：失败静默（generateAiPreview 内部吞异常），不影响推进主流程
+        for (Long caseId : transferredIds) {
+            try {
+                generateAiPreview(caseId);
+            } catch (Exception e) {
+                log.warn("小法庭 AI 预审生成异常（已忽略）：caseId={}，{}", caseId, e.getMessage());
             }
         }
         return overdue.size();
@@ -333,7 +352,7 @@ public class JuryServiceImpl implements JuryService {
         }
         notifyBoth(juryCase, "小法庭裁决结果：" + (SIDE_BUYER.equals(dto.getResult()) ? "支持买家" : "支持卖家")
                 + "。理由：" + dto.getReason().trim()
-                + (SIDE_BUYER.equals(dto.getResult()) ? "，退款已执行。" : "，售后已关闭。"));
+                + (SIDE_BUYER.equals(dto.getResult()) ? "，退款已执行，商品已自动恢复在售。" : "，售后已关闭。"));
     }
 
     // ================================ 私有工具 ================================
@@ -380,6 +399,8 @@ public class JuryServiceImpl implements JuryService {
         vo.setRulingReason(juryCase.getRulingReason());
         vo.setRuledAt(juryCase.getRuledAt());
         vo.setCreatedAt(juryCase.getCreatedAt());
+        vo.setAiPreview(juryCase.getAiPreview());
+        vo.setAiPreviewedAt(juryCase.getAiPreviewedAt());
 
         Order order = orderMapper.selectById(juryCase.getOrderId());
         if (order != null) {
@@ -526,5 +547,113 @@ public class JuryServiceImpl implements JuryService {
             log.warn("证据图片反序列化失败：{}", json);
             return new ArrayList<>();
         }
+    }
+
+    // ================================ AI 预审参考 ================================
+
+    @Override
+    public boolean generateAiPreview(Long caseId) {
+        JuryCase juryCase = juryCaseMapper.selectById(caseId);
+        // 幂等：已生成过不再重复调用；举证期未结束不生成（证据还在增长）
+        if (juryCase == null || juryCase.getAiPreviewedAt() != null
+                || JuryStageEnum.EVIDENCE.getCode().equals(juryCase.getStatus())) {
+            return false;
+        }
+        JuryAdvisorAgent agent = advisorProvider.getIfAvailable();
+        if (agent == null) {
+            return false;
+        }
+        List<JuryEvidence> evidences = juryEvidenceMapper.selectList(
+                Wrappers.<JuryEvidence>lambdaQuery()
+                        .eq(JuryEvidence::getCaseId, caseId)
+                        .orderByAsc(JuryEvidence::getId));
+        Order order = orderMapper.selectById(juryCase.getOrderId());
+        String prompt = AiPrompts.juryPreviewUserPrompt(
+                juryCase.getCaseNo(),
+                order == null ? null : order.getItemTitle(),
+                order == null ? null : String.valueOf(order.getAmount()),
+                order == null ? null : "SHIP".equals(order.getTradeType()) ? "快递" : "面交",
+                buildClaims(evidences, SIDE_BUYER),
+                buildClaims(evidences, SIDE_SELLER));
+        try {
+            JuryPreviewResult result = agent.preview(prompt);
+            if (result == null || result.getLean() == null
+                    || (!"BUYER".equals(result.getLean()) && !"SELLER".equals(result.getLean())
+                        && !"NEUTRAL".equals(result.getLean()))) {
+                log.warn("小法庭 AI 预审返回不完整，已跳过：caseId={}", caseId);
+                return false;
+            }
+            String json = objectMapper.writeValueAsString(result);
+            juryCaseMapper.update(null, Wrappers.<JuryCase>lambdaUpdate()
+                    .eq(JuryCase::getId, caseId)
+                    .set(JuryCase::getAiPreview, json)
+                    .set(JuryCase::getAiPreviewedAt, LocalDateTime.now()));
+            log.info("小法庭 AI 预审已生成：caseId={}，lean={}", caseId, result.getLean());
+            return true;
+        } catch (Exception e) {
+            // 静默降级：预审失败不影响陪审投票流程
+            log.warn("小法庭 AI 预审生成失败（已忽略）：caseId={}，{}", caseId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 按方拼接陈述与证据文本（图片以占位符表示，AI 无法查看图片内容）。
+     */
+    private String buildClaims(List<JuryEvidence> evidences, String side) {
+        StringBuilder sb = new StringBuilder();
+        int index = 1;
+        for (JuryEvidence evidence : evidences) {
+            if (!side.equals(evidence.getSide())) {
+                continue;
+            }
+            sb.append(index++).append(". ").append(evidence.getContent());
+            List<String> images = readImages(evidence.getImages());
+            if (!images.isEmpty()) {
+                sb.append("（附 ").append(images.size()).append(" 张图片，内容未知）");
+            }
+            sb.append('\n');
+        }
+        return sb.length() == 0 ? "（该方未提交证据）" : sb.toString();
+    }
+
+    @Override
+    public String draftRuling(Long caseId, String result) {
+        if (!SIDE_BUYER.equals(result) && !SIDE_SELLER.equals(result)) {
+            throw BusinessException.param("裁决方向不合法");
+        }
+        JuryCase juryCase = getCase(caseId);
+        if (!JuryStageEnum.PENDING_RULING.getCode().equals(juryCase.getStatus())) {
+            throw BusinessException.param("案件不在待裁决状态");
+        }
+        JuryAdvisorAgent agent = advisorProvider.getIfAvailable();
+        if (agent == null) {
+            throw BusinessException.param("AI 未配置，请手写裁决理由");
+        }
+        List<JuryEvidence> evidences = juryEvidenceMapper.selectList(
+                Wrappers.<JuryEvidence>lambdaQuery()
+                        .eq(JuryEvidence::getCaseId, caseId)
+                        .orderByAsc(JuryEvidence::getId));
+        Order order = orderMapper.selectById(juryCase.getOrderId());
+        long buyerVotes = juryVoteMapper.selectCount(Wrappers.<JuryVote>lambdaQuery()
+                .eq(JuryVote::getCaseId, caseId).eq(JuryVote::getVote, SIDE_BUYER));
+        long sellerVotes = juryVoteMapper.selectCount(Wrappers.<JuryVote>lambdaQuery()
+                .eq(JuryVote::getCaseId, caseId).eq(JuryVote::getVote, SIDE_SELLER));
+        String draft;
+        try {
+            draft = agent.draftRuling(AiPrompts.juryRulingUserPrompt(
+                    order == null ? null : order.getItemTitle(),
+                    order == null ? null : String.valueOf(order.getAmount()),
+                    result, buyerVotes, sellerVotes,
+                    buildClaims(evidences, SIDE_BUYER),
+                    buildClaims(evidences, SIDE_SELLER)));
+        } catch (Exception e) {
+            log.warn("小法庭裁决草稿生成失败：caseId={}，{}", caseId, e.getMessage());
+            throw BusinessException.param("AI 草稿生成失败，请手写裁决理由");
+        }
+        if (draft == null || draft.isBlank()) {
+            throw BusinessException.param("AI 未返回草稿，请手写裁决理由");
+        }
+        return draft.trim();
     }
 }

@@ -3,6 +3,7 @@ package com.brix.campus.controller.admin;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.brix.campus.common.R;
 import com.brix.campus.model.dto.AdminRulingDTO;
+import com.brix.campus.model.dto.JuryDraftDTO;
 import com.brix.campus.model.vo.AdminJuryCaseVO;
 import com.brix.campus.security.SecurityUtils;
 import com.brix.campus.service.JuryService;
@@ -26,9 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminJuryController {
 
     private final JuryService juryService;
+    private final com.brix.campus.service.PayAlipayService payAlipayService;
 
-    public AdminJuryController(JuryService juryService) {
+    public AdminJuryController(JuryService juryService,
+                               com.brix.campus.service.PayAlipayService payAlipayService) {
         this.juryService = juryService;
+        this.payAlipayService = payAlipayService;
     }
 
     /** 待裁决案件分页 */
@@ -49,5 +53,23 @@ public class AdminJuryController {
     public R<Void> ruling(@PathVariable("id") Long id, @RequestBody @Valid AdminRulingDTO dto) {
         juryService.ruling(SecurityUtils.currentUserId(), id, dto);
         return R.ok(null, "裁决已提交");
+    }
+
+    /** AI 起草裁决理由（按给定方向，返回正文供编辑确认；AI 未配置或失败时业务异常提示） */
+    @PostMapping("/jury/{id}/ruling-draft")
+    public R<String> rulingDraft(@PathVariable("id") Long id, @RequestBody @Valid JuryDraftDTO dto) {
+        return R.ok(juryService.draftRuling(id, dto.getResult()), "草稿已生成");
+    }
+
+    /**
+     * 支付宝退款核验（功能完整性）：按售后单查退款是否真实到账。
+     *
+     * @param refundId 售后单 ID（退款幂等号 = BRIXRF + refundId）
+     * @return refunded / refundAmount / tradeNo
+     */
+    @GetMapping("/jury/alipay-refund-query")
+    public R<java.util.Map<String, Object>> alipayRefundQuery(@RequestParam("orderId") Long orderId,
+                                                              @RequestParam("refundId") Long refundId) {
+        return R.ok(payAlipayService.refundQuery(orderId, "BRIXRF" + refundId));
     }
 }

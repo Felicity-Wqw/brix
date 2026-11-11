@@ -22,6 +22,11 @@ export function voteJuryCase(id, data) {
   return request.post(`/jury/cases/${id}/vote`, data)
 }
 
+/** 平台 AI 预审参考（幂等：已生成/AI 未配置/举证期中返回 false，前端静默处理） */
+export function generateJuryAiPreview(id) {
+  return request.post(`/jury/cases/${id}/ai-preview`)
+}
+
 /* ---------------- 管理端（REVIEWER） ---------------- */
 
 /** 待裁决案件分页 */
@@ -37,4 +42,9 @@ export function fetchAdminJuryCaseDetail(id) {
 /** 终审裁决（result: BUYER 支持买家退款 / SELLER 支持卖家关闭） */
 export function ruleJuryCase(id, data) {
   return request.post(`/admin/refunds/jury/${id}/ruling`, data)
+}
+
+/** AI 起草裁决理由（按给定方向返回正文，供编辑确认；AI 未配置时后端报错提示） */
+export function draftJuryRuling(id, result) {
+  return request.post(`/admin/refunds/jury/${id}/ruling-draft`, { result })
 }

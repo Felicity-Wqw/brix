@@ -2,6 +2,8 @@ package com.brix.campus.model.dto;
 
 import com.brix.campus.model.enums.RiskLevelEnum;
 
+import java.util.List;
+
 /**
  * 发布审核结论（{@code PublishAuditService} 的输出）。
  *
@@ -70,14 +72,16 @@ public record AuditDecision(RiskLevelEnum level, String source, String reason, S
     }
 
     /**
-     * 第二道闸（AI 审核）的结果。
+     * 第二道闸（AI 审核）的结果：文本结论与图片结论取严合并成一条。
      *
-     * @param result     PASS 通过 / UNCERTAIN 模糊不确定 / BAN 判定无法上架 / UNAVAILABLE 未启用或调用失败
-     * @param verdict    AI 原始判定值（对照 prompt 契约用）
-     * @param reason     AI 给出的理由
-     * @param suggestion AI 给出的修改建议
+     * @param result        PASS 通过 / UNCERTAIN 模糊不确定 / BAN 判定无法上架 / UNAVAILABLE 未启用或调用失败
+     * @param verdict       AI 原始判定值（对照 prompt 契约用）
+     * @param reason        AI 给出的理由（文字问题与图片问题写在一起）
+     * @param suggestion    AI 给出的修改建议
+     * @param imageFindings 逐图审核明细，无图或图片闸未执行时为 null
      */
-    public record Gate2(String result, String verdict, String reason, String suggestion) {
+    public record Gate2(String result, String verdict, String reason, String suggestion,
+                        List<ImageFinding> imageFindings) {
 
         public static final String PASS = "PASS";
         public static final String UNCERTAIN = "UNCERTAIN";
@@ -86,19 +90,33 @@ public record AuditDecision(RiskLevelEnum level, String source, String reason, S
 
         /** 无 AI（未配置 Key / 超时 / 解析失败）：只靠关键词闸兜底 */
         public static Gate2 unavailable(String why) {
-            return new Gate2(UNAVAILABLE, null, why, null);
+            return new Gate2(UNAVAILABLE, null, why, null, null);
         }
 
         public static Gate2 pass(String verdict, String reason) {
-            return new Gate2(PASS, verdict, reason, null);
+            return new Gate2(PASS, verdict, reason, null, null);
+        }
+
+        public static Gate2 pass(String verdict, String reason, List<ImageFinding> imageFindings) {
+            return new Gate2(PASS, verdict, reason, null, imageFindings);
         }
 
         public static Gate2 uncertain(String verdict, String reason, String suggestion) {
-            return new Gate2(UNCERTAIN, verdict, reason, suggestion);
+            return new Gate2(UNCERTAIN, verdict, reason, suggestion, null);
+        }
+
+        public static Gate2 uncertain(String verdict, String reason, String suggestion,
+                                      List<ImageFinding> imageFindings) {
+            return new Gate2(UNCERTAIN, verdict, reason, suggestion, imageFindings);
         }
 
         public static Gate2 ban(String verdict, String reason, String suggestion) {
-            return new Gate2(BAN, verdict, reason, suggestion);
+            return new Gate2(BAN, verdict, reason, suggestion, null);
+        }
+
+        public static Gate2 ban(String verdict, String reason, String suggestion,
+                                List<ImageFinding> imageFindings) {
+            return new Gate2(BAN, verdict, reason, suggestion, imageFindings);
         }
 
         /** AI 是否明确判定「无法上架」 */
@@ -110,6 +128,22 @@ public record AuditDecision(RiskLevelEnum level, String source, String reason, S
         public boolean isUncertain() {
             return UNCERTAIN.equals(result);
         }
+    }
+
+    /**
+     * 单张图片的审核明细（并入 Gate2，不单独成篇）。
+     *
+     * @param index   图片在相册中的序号（从 1 开始）
+     * @param url     图片可访问路径
+     * @param verdict PASS / REJECT / UNCERTAIN / FAILED（技术失败或超时）
+     * @param reason  审核理由
+     */
+    public record ImageFinding(int index, String url, String verdict, String reason) {
+
+        public static final String PASS = "PASS";
+        public static final String REJECT = "REJECT";
+        public static final String UNCERTAIN = "UNCERTAIN";
+        public static final String FAILED = "FAILED";
     }
 
     /** 第一道闸未命中（低风险候选） */

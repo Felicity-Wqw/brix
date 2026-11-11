@@ -62,6 +62,8 @@ public class SecurityConfig {
                         // 1. 完全公开的入口
                         .requestMatchers("/auth/register", "/auth/login").permitAll()
                         .requestMatchers("/uploads/**", "/ws/**", "/error").permitAll()
+                        // 支付宝异步回调：公网可达时支付宝 POST 调用，靠 RSA2 验签自证身份
+                        .requestMatchers("/orders/alipay/notify").permitAll()
                         // 2. 公开的只读接口（注意 /items/mine 必须先于 /items/** 声明）
                         .requestMatchers(HttpMethod.GET, "/categories").permitAll()
                         .requestMatchers(HttpMethod.GET, "/schools").permitAll()
@@ -75,7 +77,8 @@ public class SecurityConfig {
                         //    审核员只管内容，运营只管经营，交叉访问一律 403
                         .requestMatchers("/admin/login").permitAll()
                         .requestMatchers("/admin/items/**", "/admin/reports/**",
-                                "/admin/audit-logs/**", "/admin/refunds/**").hasRole("REVIEWER")
+                                "/admin/audit-logs/**", "/admin/refunds/**",
+                                "/admin/appeals/**").hasRole("REVIEWER")
                         .requestMatchers("/admin/dashboard/**", "/admin/users/**",
                                 "/admin/orders/**", "/admin/categories/**", "/admin/announcements/**").hasRole("OPERATOR")
                         // 兜底：/admin 下新增但未归类的接口，两个后台角色都放行（避免新接口默认裸奔）

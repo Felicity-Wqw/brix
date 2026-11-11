@@ -131,6 +131,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '后台登录' }
   },
   {
+    path: '/admin/screen',
+    name: 'admin-screen',
+    component: () => import('@/views/admin/AdminScreen.vue'),
+    meta: { requiresAuth: true, roles: ['OPERATOR'], title: '数据大屏' }
+  },
+  {
     path: '/admin',
     component: () => import('@/layout/AdminLayout.vue'),
     redirect: '/admin/dashboard',
@@ -164,6 +170,12 @@ const routes: RouteRecordRaw[] = [
         name: 'admin-jury',
         component: () => import('@/views/admin/AdminJury.vue'),
         meta: { title: '小法庭裁决', sub: '陪审期满案件终审 · 双方证据 + 用户投票统计', roles: ['REVIEWER'] }
+      },
+      {
+        path: 'appeals',
+        name: 'admin-appeals',
+        component: () => import('@/views/admin/AdminAppeals.vue'),
+        meta: { title: '申诉处理', sub: '卖家对审核/处置结果的申诉 · AI 复核建议仅供参考', roles: ['REVIEWER'] }
       },
       {
         path: 'users',

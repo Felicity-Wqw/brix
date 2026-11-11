@@ -98,6 +98,10 @@ public class ItemAuditLog implements Serializable {
     /** AI 给出的理由 */
     private String gate2Reason;
 
+    /** AI 闸逐图审核明细 JSON：[{index,url,verdict,reason}]（无图片审核为 NULL） */
+    @TableField("gate2_findings")
+    private String gate2Findings;
+
     // ---------------------- 分流结论 ----------------------
 
     /** LOW / MEDIUM / HIGH */

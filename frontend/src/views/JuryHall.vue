@@ -63,6 +63,22 @@
             </p>
           </div>
 
+          <div class="ai-preview" v-if="preview">
+            <p class="ai-preview__head">
+              <span class="ai-preview__title">AI 预审参考</span>
+              <el-tag size="small" type="info" effect="plain">仅供参考，不影响计票</el-tag>
+              <el-tag size="small" effect="plain" :type="preview.lean === 'NEUTRAL' ? 'info' : 'warning'">
+                {{ preview.lean === 'BUYER' ? '倾向买家' : preview.lean === 'SELLER' ? '倾向卖家' : '倾向中立' }}
+              </el-tag>
+            </p>
+            <ul class="ai-preview__points">
+              <li v-for="(p, i) in preview.disputedPoints" :key="i">{{ p }}</li>
+            </ul>
+            <p class="ai-preview__summary"><strong>买方证据摘要：</strong>{{ preview.buyerSummary }}</p>
+            <p class="ai-preview__summary"><strong>卖方证据摘要：</strong>{{ preview.sellerSummary }}</p>
+            <p class="ai-preview__reason">{{ preview.leanReason }}</p>
+          </div>
+
           <div class="evidence">
             <p class="evidence__title">双方证据（{{ detail.evidences?.length || 0 }} 条）</p>
             <div v-for="(ev, i) in detail.evidences" :key="i" class="evidence__item" :class="`evidence__item--${ev.side}`">
@@ -124,10 +140,10 @@
 </template>
 
 <script setup>
-import { onMounted, ref, reactive } from 'vue'
+import { onMounted, ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchJuryCases, fetchJuryCaseDetail, voteJuryCase } from '@/api/jury'
+import { fetchJuryCases, fetchJuryCaseDetail, voteJuryCase, generateJuryAiPreview } from '@/api/jury'
 import { formatTime, resolveImage } from '@/utils/format'
 import NavBar from '@/layout/components/NavBar.vue'
 import AppFooter from '@/layout/components/AppFooter.vue'
@@ -158,12 +174,33 @@ async function openCase(row) {
   detail.value = null
   try {
     detail.value = await fetchJuryCaseDetail(row.id)
+    // 陪审期案件缺 AI 预审时静默补触发一次（幂等；失败不提示，卡片不显示即可）
+    if (detail.value?.status === 'VOTING' && !detail.value?.aiPreview) {
+      try {
+        const generated = await generateJuryAiPreview(row.id)
+        if (generated) {
+          detail.value = await fetchJuryCaseDetail(row.id)
+        }
+      } catch { /* 静默 */ }
+    }
   } catch (error) {
     /* 拦截器已提示 */
   } finally {
     detailLoading.value = false
   }
 }
+
+/** AI 预审参考（JSON 落库，解析失败不展示卡片） */
+const preview = computed(() => {
+  const raw = detail.value?.aiPreview
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed?.lean ? parsed : null
+  } catch {
+    return null
+  }
+})
 
 async function onVote(vote) {
   try {
@@ -479,5 +516,48 @@ onMounted(load)
   text-align: center;
   font-size: 12.5px;
   color: #8d99a8;
+}
+
+.ai-preview {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 0.5px dashed #9fe1cb;
+  border-radius: 10px;
+  background: #f2faf7;
+}
+
+.ai-preview__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.ai-preview__title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #0f6e56;
+}
+
+.ai-preview__points {
+  margin: 0 0 8px;
+  padding-left: 16px;
+  list-style: decimal;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #2c2c2a;
+}
+
+.ai-preview__summary {
+  margin: 4px 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #444441;
+}
+
+.ai-preview__reason {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #5f5e5a;
 }
 </style>

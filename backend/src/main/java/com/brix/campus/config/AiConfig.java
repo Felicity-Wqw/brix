@@ -3,8 +3,11 @@ package com.brix.campus.config;
 import com.brix.campus.ai.AiEstimator;
 import com.brix.campus.ai.AiRepository;
 import com.brix.campus.ai.AiTools;
+import com.brix.campus.ai.AppealReviewAgent;
+import com.brix.campus.ai.DashboardReportAgent;
 import com.brix.campus.ai.ItemAuditAgent;
 import com.brix.campus.ai.ItemEstimationAgent;
+import com.brix.campus.ai.JuryAdvisorAgent;
 import com.brix.campus.ai.LlmEstimator;
 import com.brix.campus.ai.RuleBasedEstimator;
 import com.brix.campus.service.CategoryService;
@@ -49,9 +52,11 @@ public class AiConfig {
     }
 
     /**
-     * ChatModel：仅在配置了 {@code brix.ai.api-key} 时创建（空字符串等于未配置）。
+     * ChatModel（文本）：仅在配置了 {@code brix.ai.api-key} 时创建（空字符串等于未配置）。
+     * 标记 {@code @Primary}：容器中同时存在视觉模型 Bean 时，文本智能体按类型注入仍取文本模型。
      */
     @Bean
+    @Primary
     @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
     public ChatModel chatModel(@Value("${brix.ai.base-url}") String baseUrl,
                                @Value("${brix.ai.api-key}") String apiKey,
@@ -66,6 +71,28 @@ public class AiConfig {
                 .modelName(modelName)
                 .temperature(0.3d)
                 // J01 十秒超时；maxRetries=0 表示立即降级，不叠加延迟
+                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .maxRetries(0)
+                .build();
+    }
+
+    /**
+     * 视觉审核模型（图片审核第二道闸）：OpenAI 兼容协议接入智谱 glm-4v-flash（免费）。
+     * 独立 Key/厂商，未配置时图片闸记 UNAVAILABLE，发布仅走文本闸。
+     */
+    @Bean
+    @ConditionalOnExpression("!'${brix.ai.vision.api-key:} '.isBlank()")
+    public ChatModel visionChatModel(@Value("${brix.ai.vision.base-url}") String baseUrl,
+                                     @Value("${brix.ai.vision.api-key}") String apiKey,
+                                     @Value("${brix.ai.vision.model}") String modelName,
+                                     @Value("${brix.ai.vision.timeout-seconds:8}") long timeoutSeconds) {
+        log.info("已启用视觉审核模型：baseUrl={}, model={}", baseUrl, modelName);
+        return OpenAiChatModel.builder()
+                .baseUrl((baseUrl == null || baseUrl.isBlank())
+                        ? "https://open.bigmodel.cn/api/paas/v4" : baseUrl)
+                .apiKey(apiKey)
+                .modelName(modelName)
+                .temperature(0.1d)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
                 .maxRetries(0)
                 .build();
@@ -101,6 +128,42 @@ public class AiConfig {
     @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
     public ItemAuditAgent itemAuditAgent(ChatModel chatModel) {
         return AiServices.builder(ItemAuditAgent.class)
+                .chatModel(chatModel)
+                .build();
+    }
+
+    /**
+     * 小法庭预审智能体：无工具、单轮结构化输出，专供纠纷环节举证期预审参考。
+     * 无 Key 时不创建，预审相关流程自动静默跳过。
+     */
+    @Bean
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
+    public JuryAdvisorAgent juryAdvisorAgent(ChatModel chatModel) {
+        return AiServices.builder(JuryAdvisorAgent.class)
+                .chatModel(chatModel)
+                .build();
+    }
+
+    /**
+     * 申诉复核智能体：无工具、单轮结构化输出，专供后台申诉处理参考。
+     * 无 Key 时不创建，申诉复核接口业务报错提示手写处理。
+     */
+    @Bean
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
+    public AppealReviewAgent appealReviewAgent(ChatModel chatModel) {
+        return AiServices.builder(AppealReviewAgent.class)
+                .chatModel(chatModel)
+                .build();
+    }
+
+    /**
+     * 运营数据分析报告智能体：单轮输出，周 / 月 / 季度三周期复用。
+     * 无 Key 时不创建，报告接口业务报错提示查看统计图表。
+     */
+    @Bean
+    @ConditionalOnExpression("!'${brix.ai.api-key:} '.isBlank()")
+    public DashboardReportAgent dashboardReportAgent(ChatModel chatModel) {
+        return AiServices.builder(DashboardReportAgent.class)
                 .chatModel(chatModel)
                 .build();
     }

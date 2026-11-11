@@ -166,6 +166,18 @@
           <span>AI 理由</span>
           <strong>{{ drawer.log.gate2Reason || '无' }}</strong>
         </div>
+        <template v-if="imageFindings(drawer.log).length">
+          <p class="detail__section">逐图审核明细</p>
+          <div class="detail__images">
+            <div v-for="f in imageFindings(drawer.log)" :key="f.url + f.index" class="detail__image">
+              <el-image :src="resolveImage(f.url)" fit="cover" class="detail__image-thumb"
+                        :preview-src-list="[resolveImage(f.url)]" preview-teleported />
+              <span class="detail__image-badge"
+                    :class="`imgv--${(f.verdict || '').toLowerCase()}`"
+                    :title="f.reason || ''">{{ imageVerdictLabel(f.verdict) }}</span>
+            </div>
+          </div>
+        </template>
 
         <p class="detail__section">人工处置</p>
         <div class="detail__row"><span>处置人</span><strong>{{ drawer.log.handlerNickname || '尚未处置' }}</strong></div>
@@ -184,6 +196,26 @@ import { onMounted, reactive, ref } from 'vue'
 import { Picture, Search } from '@element-plus/icons-vue'
 import { fetchAuditLogs } from '@/api/admin'
 import { formatTime, resolveImage } from '@/utils/format'
+
+/** 解析审核日志里的逐图审核明细（gate2_findings JSON） */
+function imageFindings(log) {
+  if (!log?.imageFindingsJson) return []
+  try {
+    return JSON.parse(log.imageFindingsJson)
+  } catch (error) {
+    return []
+  }
+}
+
+function imageVerdictLabel(verdict) {
+  switch (verdict) {
+    case 'PASS': return '通过'
+    case 'REJECT': return '违规'
+    case 'UNCERTAIN': return '存疑'
+    case 'FAILED': return '未审'
+    default: return verdict || ''
+  }
+}
 
 const filters = reactive({
   keyword: '',
@@ -495,4 +527,44 @@ onMounted(load)
   line-height: 1.75;
   color: #5c6b63;
 }
+
+/* ---------------- 图片审核明细（gate2_findings） ---------------- */
+.detail__images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.detail__image {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 0.5px solid var(--brix-border);
+}
+
+.detail__image-thumb {
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.detail__image-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  font-size: 11px;
+  text-align: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.imgv--pass { background: rgba(16, 128, 90, 0.85); }
+.imgv--reject { background: rgba(192, 45, 45, 0.9); }
+.imgv--uncertain { background: rgba(176, 106, 20, 0.9); }
+.imgv--failed { background: rgba(95, 94, 90, 0.85); }
+
 </style>
